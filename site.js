@@ -34,6 +34,7 @@ const referenceTravel = (n, a, b) => step(n, a, b, linear);
 const reveal = (n, a, b) => step(n, a, b, revealEase);
 const design = 'assets/design/';
 const models = 'assets/models/';
+const touchViewport = matchMedia('(pointer:coarse)');
 const compactMedia = matchMedia('(max-width:600px)').matches;
 const adaptiveLayout = matchMedia('(max-width:1024px) and (orientation:portrait)');
 const landscapePlans = matchMedia('(orientation:landscape) and (pointer:coarse) and (max-width:1366px) and (max-height:1024px)');
@@ -384,7 +385,14 @@ if (!compactMedia) {
   for (const [i, n] of [[150,1],[330,91],[510,181]])
     masterPaths[i] = sequenceAsset(morphFolder + '-hd-detail',n);
 }
-const house = new ScrubFilm($('#house-sequence'),{
+const tabletHouse = !packagedMedia && touchViewport.matches && !compactMedia &&
+  Math.min(screen.width, screen.height) <= 1024;
+const houseCanvas = $('#house-sequence');
+const house = tabletHouse ? new FrameSequence(houseCanvas, schedule, {
+  source:mediaSource,
+  asset:(folder,index) => folder === orbitFolder ? sequenceAsset(orbitFolder,index)
+    : masterPaths[index + 149] ?? interleavedAsset(morphFolder,index)
+}) : new ScrubFilm(houseCanvas,{
   path:scrubPath('house',detailProfile), matte:'below',
   offset:folder => folder === morphFolder ? 150 : 0, stillPaths:masterPaths,
   fallback:{asset:(folder,index) => {
@@ -624,6 +632,27 @@ function title(name, t, a, b, c, d) {
   scenes[name].style.opacity = exitOpacity;
   setTitleFadeProgress(fade, range(t, a, b));
 }
+function portraitOpeningScale() {
+  return (width <= 600 ? 755 / 390 : 1505 / 768) * width / 1920;
+}
+function portraitRoofOffset() {
+  return width <= 600 ? 1.03 * height - 258.32 * width / 390 : height - 442 * width / 768;
+}
+function houseTransform(scale, y) {
+  return 'translate3d(' + (width - 1920 * scale) / 2 + 'px,' + y + 'px,0) scale(' + scale + ')';
+}
+let openingHouseAnimation;
+function measureOpeningHouse() {
+  openingHouseAnimation?.cancel();
+  openingHouseAnimation = null;
+  if (!adaptiveLayout.matches || !touchViewport.matches || motion.matches ||
+      !window.ScrollTimeline || !CSS.supports('animation-range', '0px 300px')) return;
+  openingHouseAnimation = pullback.animate([
+    {transform:houseTransform(portraitOpeningScale(), portraitRoofOffset())},
+    {transform:houseTransform(panoramaWidth / 1920, (height - panoramaWidth * 9 / 16) / 2)}
+  ], {timeline:new ScrollTimeline({source:document.scrollingElement}), rangeStart:'0px',
+    rangeEnd:scrollAt(1.82) + 'px', fill:'both', easing:'cubic-bezier(.333333,.083333,.666667,.883333)'});
+}
 function heroAndVillage(t, openingHeaderBottom) {
   const panoramaStart = 1.7, frontMatch = 1.82, exitStart = 3.82, exitEnd = exitStart + overlapSpan;
   if (t >= 2.1) scenes.hero.classList.remove('first-visit');
@@ -641,17 +670,19 @@ function heroAndVillage(t, openingHeaderBottom) {
     // The reference shows 496px of the facade below the roof in a 1920×1080 frame.
     const roofY = portrait ? openingHeight * (mobile ? 1.01 : 1) - openingWidth * 496 / 1920
                            : Math.max(visibleStageHeight * 584 / 1080, visibleStageHeight - openingWidth * 496 / 1920);
-    const openingScale = adaptiveLayout.matches ? (mobile ? 755 / 390 : 1505 / 768) * width / 1920 : (openingWidth / 1920) * (1688 / 960);
+    const openingScale = adaptiveLayout.matches ? portraitOpeningScale() : (openingWidth / 1920) * (1688 / 960);
     const fullScale = fullWidth / 1920;
     const scale = openingScale + (fullScale - openingScale) * progress;
     const roofOffset = adaptiveLayout.matches
-      ? mobile ? 1.03 * openingHeight - 258.32 * width / 390 : openingHeight - 442 * width / 768
+      ? portraitRoofOffset()
       : roofY - 276 * openingScale;
     const fullTop = (openingHeight - fullWidth * 9 / 16) / 2;
     const y = roofOffset + (fullTop - roofOffset) * progress;
-    const imageTransform = 'translate3d(' + (width - 1920 * scale) / 2 + 'px,' + y + 'px,0) scale(' + scale + ')';
-    pullback.style.transform = imageTransform;
-    if (!adaptiveLayout.matches) heroGround.style.transform = imageTransform;
+    if (!openingHouseAnimation) {
+      const transform = houseTransform(scale, y);
+      pullback.style.transform = transform;
+      if (!adaptiveLayout.matches) heroGround.style.transform = transform;
+    }
     const fade = heroCopyFade(t);
     if (fade < .25 && mast.classList.contains('skip-intro')) {
       for (const [node, delay] of heroText) playTextReveal(node, {delay});
@@ -664,7 +695,6 @@ function heroAndVillage(t, openingHeaderBottom) {
     const descent = motion.matches ? 0 : step(t, 0, .5) * clamp(width * .036, 28, 78);
     intro.style.transform = 'translate3d(-50%,calc(' + (copyCenter + descent) + 'px - 50%),0)';
     intro.style.opacity = 1 - fade;
-    scenes.hero.style.setProperty('--roof-y', y + 274 * scale + 'px');
   }
   if (visible('panorama', t >= panoramaStart && t < exitEnd)) {
     if (fullWidth < panoramaCover) {
@@ -817,7 +847,7 @@ function renderPlanRail(t) {
 }
 function houseAndPlans(t) {
   const active = visible('geometry', t >= 5.12 && t < interiorArrival);
-  if (t > 4.4 && t < 5.12) house.set(orbitFolder, 1, 150);
+  if (t > (tabletHouse ? 3.2 : 4.4) && t < 5.12) house.set(orbitFolder, 1, 150);
   if (!active) {
     plansOpen = false;
     return;
@@ -1094,8 +1124,8 @@ $('#interior-count span').textContent = ' — ' + interiors.length;
 interiorSlider.setAttribute('aria-valuemax', interiors.length);
 
 function interior(t) {
-  if (t > 16 && t < interiorEntry) loadImage(interiors[0]);
-  if (t >= interiorEnd && t < interiorEnd + 1) loadImage(interiors[interiorLast]);
+  if (t > 14.5 && t < interiorEntry) interiors.slice(0, 3).forEach(loadImage);
+  if (t >= interiorEnd && t < interiorEnd + 2) interiors.slice(-3).forEach(loadImage);
   if (!visible('interiors', t >= interiorEntry && t < interiorEnd)) {
     interiorCopyShown = false;
     return;
@@ -1113,7 +1143,7 @@ function interior(t) {
   const i = Math.round(position);
   const changed = i !== interiorIndex;
   if (changed) {
-    for (const image of interiors.slice(Math.max(0, i - 1), i + 2)) loadImage(image);
+    for (const image of interiors.slice(Math.max(0, i - 2), i + 3)) loadImage(image);
     const {name, body} = catalog.interiors[i];
     interiorTitle.textContent = name;
     interiorBody.textContent = body;
@@ -1313,7 +1343,6 @@ function render() {
     }
   }
   current = timeAt(y);
-  updateReadingTouchRegion(current);
   if (!packagedMedia) prepareOnlineMedia(current);
   const openingHeaderBottom = header(current, y);
   heroAndVillage(current, openingHeaderBottom);
@@ -1336,11 +1365,23 @@ function measurePanorama() {
   visibleStageHeight = viewport.clientHeight;
   panoramaCover = Math.max(width, visibleStageHeight * 16 / 9);
   panoramaWidth = portrait ? width * (width <= 600 ? 1.64 : 1.38) : Math.min(panoramaCover, width * 1.4);
-  villageCanvas.style.cssText = panoramaWidth < panoramaCover
-    ? 'left:50%;top:50%;width:' + panoramaCover + 'px;height:' + panoramaCover * 9 / 16 + 'px' : '';
+  const fitted = panoramaWidth < panoramaCover;
+  villageCanvas.style.left = villageCanvas.style.top = fitted ? '50%' : '';
+  villageCanvas.style.width = fitted ? panoramaCover + 'px' : '';
+  villageCanvas.style.height = fitted ? panoramaCover * 9 / 16 + 'px' : '';
+  if (!fitted) villageCanvas.style.transform = '';
 }
 function measure() {
+  if (touchViewport.matches && width !== viewport.clientWidth) {
+    document.documentElement.style.removeProperty('--view');
+    document.documentElement.style.setProperty('--stage-view', stageHeight() + 'px');
+  }
+  viewport.style.minHeight = '';
   const timelineHeight = parseFloat(getComputedStyle(viewport).minHeight);
+  if (touchViewport.matches) {
+    document.documentElement.style.setProperty('--view', timelineHeight + 'px');
+    viewport.style.minHeight = '0';
+  }
   const resized = unit && (width !== viewport.clientWidth || height !== timelineHeight);
   if (resized) finishCardLines();
   const previousTime = resized ? timeAt(window.scrollY) : null;
@@ -1435,6 +1476,7 @@ function measure() {
   planUnit = usesPlanRail() ? unit * .82 : unit + widePlanSpacing * (widePitch / cardPitch - unit);
   buildEntryStretch = .75;
   story.style.height = 'calc(' + scrollAt(END) + 'px + var(--stage-view,var(--view)))';
+  measureOpeningHouse();
   for (const [id, time] of chapters) document.getElementById(id).style.top = Math.round(scrollAt(time)) + 'px';
   if (previousTime !== null && previousTime <= END) {
     window.scrollTo({top:scrollAt(previousTime), behavior:'instant'});
@@ -1560,26 +1602,17 @@ const interiorStops = Array.from({length:interiorLast + 1}, (_, index) => interi
 
 function animateToTime(time, duration, gallery = null, slide = null, curve = scrollEase) {
   interruptScroll();
-  let from = window.scrollY;
+  const from = window.scrollY;
   const to = Math.round(scrollAt(time));
   if (from === to || !duration || motion.matches) {
     window.scrollTo({top:to,behavior:'instant'});
     return;
   }
-  let start = performance.now(), lastY = from;
+  const start = performance.now();
+  let lastY = from;
   function advance(now) {
     if (Math.abs(window.scrollY - lastY) > 1) {
-      const owner = selectedSlide?.nativeRelease;
-      if (!owner || owner !== nativeTouchRange || window.scrollY < owner.min - 1 ||
-          window.scrollY > owner.max + 1) return interruptScroll();
-      // A quick second touch can already belong to the native compositor.
-      // Let its final momentum frames land, then settle from that position.
-      from = lastY = window.scrollY;
-      start = now + 70;
-    }
-    if (now < start) {
-      selectedSlide.frame = requestAnimationFrame(advance);
-      return;
+      return interruptScroll();
     }
     const progress = range(now, start, start + duration);
     window.scrollTo({top:from + (to - from) * curve(progress),behavior:'instant'});
@@ -1653,12 +1686,12 @@ function acceptsPageGesture(event) {
   return !event.defaultPrevented && !document.querySelector('dialog[open]') &&
     !event.target.closest?.('input,textarea,select,[contenteditable="true"]');
 }
-let wheelGesture = null, finger = null, nativeTouchRange = null;
+let wheelGesture = null, finger = null;
 const wheelStepThreshold = 16;
 const wheelQuietTime = 180;
 const fineWheelPause = 350;
 function resetGestures() {
-  wheelGesture = finger = nativeTouchRange = null;
+  wheelGesture = finger = null;
   interruptScroll();
 }
 window.addEventListener('pointerdown', event => {
@@ -1694,9 +1727,10 @@ function startsAnotherWheelStep(gesture, gap, magnitude, now) {
 }
 
 window.addEventListener('wheel', event => {
+  if (touchViewport.matches) { resetGestures(); return; }
   if (!acceptsPageGesture(event) || !event.cancelable || event.ctrlKey || event.metaKey ||
       event.shiftKey || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-  finger = nativeTouchRange = null;
+  finger = null;
   const mode = event.deltaMode;
   const delta = event.deltaY * (mode === 1 ? 16 : mode === 2 ? height : 1);
   const direction = Math.sign(delta), magnitude = Math.abs(delta), now = event.timeStamp;
@@ -1735,24 +1769,6 @@ window.addEventListener('wheel', event => {
   finishReadingInput(stop, origin, direction * gesture.distance);
 }, {passive:false});
 
-// On touch the wall title and its first layer form one reading sequence.
-function touchReadingGroups() {
-  return [interiorStops, [wallTitleStop, ...wallStops], readingGroups[3]];
-}
-function nativeRangeAt(y, groups) {
-  const previous = nextReadingStop(y, -Infinity, groups), next = nextReadingStop(y, Infinity, groups);
-  return {
-    min:previous ? Math.round(scrollAt(previous.time)) : -Infinity,
-    max:next ? Math.round(scrollAt(next.time)) : Infinity
-  };
-}
-window.addEventListener('scroll', () => {
-  if (!nativeTouchRange) return;
-  const y = window.scrollY;
-  const bounded = clamp(y, nativeTouchRange.min, nativeTouchRange.max);
-  if (bounded !== y) window.scrollTo({top:bounded, behavior:'instant'});
-}, {passive:true});
-
 const touchStepThreshold = 12;
 function handleReadingTouch(event) {
   if (!finger || event.touches.length > 1) return;
@@ -1765,13 +1781,10 @@ function handleReadingTouch(event) {
   }
   if (!finger.axis) return;
   if (finger.axis === 'x') {
-    if (finger.group !== interiorStops) return;
-    if (event.cancelable) event.preventDefault();
     if (!finger.dragged && Math.abs(dx) < touchStepThreshold) return;
     if (!finger.dragged) {
       interruptScroll();
       finger.dragged = true;
-      nativeTouchRange = null;
     }
     if (releasing) {
       const direction = Math.abs(dx) >= touchStepThreshold ? Math.sign(dx) : 0;
@@ -1786,69 +1799,28 @@ function handleReadingTouch(event) {
     }
     return;
   }
-  if (finger.handled) {
-    if (event.cancelable) event.preventDefault();
-    return;
-  }
-  const origin = readingOrigin(finger.scrollY, Math.sign(dy));
-  const stop = nextReadingStop(origin, dy, finger.groups);
-  if ((!stop || stop.entry) && origin === finger.scrollY) {
-    interruptScroll();
-    return;
-  }
-  if (event.cancelable) event.preventDefault();
-  if (Math.abs(dy) < touchStepThreshold || (!event.cancelable && !releasing)) return;
-  const nativeRelease = !event.cancelable && releasing;
-  if (!nativeRelease) nativeTouchRange = null;
-  finger.handled = true;
-  finishReadingInput(stop, origin, dy, true);
-  if (nativeRelease && selectedSlide && nativeTouchRange) {
-    selectedSlide.nativeRelease = nativeTouchRange;
-    // A second gesture can select a further stop before the first finishes.
-    const target = Math.round(scrollAt(stop?.time ?? timeAt(origin)));
-    nativeTouchRange.min = Math.min(target, nativeTouchRange.min);
-    nativeTouchRange.max = Math.max(target, nativeTouchRange.max);
-  }
 }
-let readingTouchRegion = false;
-function updateReadingTouchRegion(t) {
-  if (!navigator.maxTouchPoints) return;
-  const active = (t >= interiorEntry && t <= interiorEnd) ||
-    (t >= wallTitleStop - .1 && t <= wallEnd) || (t >= buildStart - .1 && t <= formArrival + .12);
-  if (active === readingTouchRegion) return;
-  readingTouchRegion = active;
-  if (active) window.addEventListener('touchmove', handleReadingTouch, {passive:false});
-  else window.removeEventListener('touchmove', handleReadingTouch);
-}
+// Vertical drags and momentum always belong to the browser. Only a sideways
+// drag over the interior gallery moves its rail along the shared timeline.
 window.addEventListener('touchstart', event => {
-  // A new finger ends the previous native fling, even on a field or the footer.
-  if (selectedSlide?.nativeRelease) interruptScroll();
-  wheelGesture = finger = nativeTouchRange = null;
-  if (event.defaultPrevented || event.touches.length !== 1 ||
-      document.querySelector('dialog[open]')) return;
-  const field = event.target.closest?.('input,textarea,select,[contenteditable="true"]');
-  if (field && (field === document.activeElement || field.scrollHeight > field.clientHeight + 1)) return;
-  const y = window.scrollY, groups = touchReadingGroups();
-  nativeTouchRange = nativeRangeAt(y, groups);
-  const group = groups.find(times => y >= Math.round(scrollAt(times[0])) - 1 &&
-    y <= Math.round(scrollAt(times.at(-1))) + 1);
-  if (!group) { interruptScroll(); return; }
+  resetGestures();
+  if (event.touches.length !== 1 || !acceptsPageGesture(event)) return;
+  const t = timeAt(window.scrollY);
+  if (t < interiorEntry || t > interiorEnd) return;
   const touch = event.touches[0];
-  finger = {x:touch.clientX, y:touch.clientY, scrollY:y, groups, group,
-    position:group === interiorStops ? interiorPosition(timeAt(y)) : 0};
+  finger = {x:touch.clientX, y:touch.clientY, position:interiorPosition(t)};
 }, {passive:true});
-function finishTouch(event) {
-  if (event.type === 'touchend' && finger) handleReadingTouch(event);
+window.addEventListener('touchmove', handleReadingTouch, {passive:true});
+window.addEventListener('touchend', event => {
+  if (finger) handleReadingTouch(event);
   finger = null;
-}
-window.addEventListener('touchend', finishTouch, {passive:false});
-window.addEventListener('touchcancel', finishTouch, {passive:true});
+}, {passive:true});
+window.addEventListener('touchcancel', () => { finger = null; }, {passive:true});
 window.addEventListener('keydown', event => {
-  nativeTouchRange = null;
   if (!acceptsPageGesture(event) || event.altKey || event.ctrlKey || event.metaKey ||
       event.target.closest?.('button,a,[role="slider"]')) return;
   const direction = {ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1,' ':event.shiftKey ? -1 : 1}[event.key];
-  wheelGesture = finger = nativeTouchRange = null;
+  wheelGesture = finger = null;
   if (!direction) { interruptScroll(); return; }
   const stride = event.key.startsWith('Arrow') ? 40 : height * .9;
   const y = window.scrollY;
@@ -2035,8 +2007,32 @@ contactForm.addEventListener('submit', event => {
   formStatus.focus({preventScroll:true});
   enquiryDraft.click();
 });
-window.addEventListener('scroll', schedule, {passive:true});
+let stageResizeTimer;
+function stageHeight() {
+  return window.visualViewport?.scale === 1 ? Math.round(visualViewport.height) : innerHeight;
+}
+function settleStageHeight() {
+  clearTimeout(stageResizeTimer);
+  stageResizeTimer = setTimeout(() => {
+    stageResizeTimer = null;
+    if (window.visualViewport && visualViewport.scale !== 1) return;
+    document.documentElement.style.setProperty('--stage-view', stageHeight() + 'px');
+    measurePanorama();
+    schedule();
+  }, 180);
+}
+window.addEventListener('scroll', () => {
+  schedule();
+  if (stageResizeTimer) settleStageHeight();
+}, {passive:true});
+window.visualViewport?.addEventListener('resize', () => {
+  if (touchViewport.matches && width === viewport.clientWidth) settleStageHeight();
+}, {passive:true});
 window.addEventListener('resize', () => {
+  if (touchViewport.matches && width === viewport.clientWidth) {
+    settleStageHeight();
+    return;
+  }
   if (width !== viewport.clientWidth || height !== parseFloat(getComputedStyle(viewport).minHeight)) {
     resetGestures();
     measure();
@@ -2048,7 +2044,7 @@ window.addEventListener('resize', () => {
 adaptiveLayout.addEventListener('change', measure);
 landscapePlans.addEventListener('change', measure);
 document.addEventListener('visibilitychange', schedule);
-motion.addEventListener('change', () => { measureMastMotion(); schedule(); });
+motion.addEventListener('change', () => { measureMastMotion(); measureOpeningHouse(); schedule(); });
 observeSmoothCorners(all([
   '.plan-card', '.plan-stats > div', '.drawing', '#interior-images .slide-image', '.interior-card',
   '.wall-card', '.process-frame', '.process-card', '.contact-film', '#enquiry-form',
@@ -2067,8 +2063,8 @@ function prepareOnlineMedia(t) {
     loadImage($('.village-still img'));
     scenes.panorama.style.setProperty('--panorama-poster', `url("${sequenceAsset(villageFolder, 1, 'jpg')}")`);
   }
-  if (!house.loading && t > 3.2 && t < 18.15) house.loadOnline();
-  if (!house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
+  if (!tabletHouse && !house.loading && t > 3.2 && t < 18.15) house.loadOnline();
+  if (!tabletHouse && !house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
   if (t > 10.8 && t < 19.05) {
     if (adaptiveLayout.matches && !facadePreview.src) {
       facadePreview.onload = schedule;
@@ -2121,7 +2117,7 @@ async function warmOpening(onProgress, signal) {
   images.forEach(loadImage);
   if (t >= filmArrival) forestFilm.poster = contactPoster;
   const work = Promise.allSettled([...images.map(image => image.decode()), ...openingFonts()]);
-  const film = t < 4.25 ? village : t < 13.86 ? house : t < 16.85 ? facadePose
+  const film = t < 4.25 ? village : t < 13.86 ? (tabletHouse ? null : house) : t < 16.85 ? facadePose
     : t >= wallStart && t < wallEnd ? wall : null;
   // The opening film must already be local when the first scroll arrives.
   // Farther scenes fetch on approach and do not compete for startup bandwidth.

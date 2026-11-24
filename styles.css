@@ -3,7 +3,6 @@
 @font-face{font-family:Geist Mono;src:url('assets/fonts/geist-mono-500.woff2') format('woff2');font-weight:500;font-display:swap}
 :root{--paper:#e1e1e1;--ink:#353b3c;--card:#fbf9f8;--pad:clamp(8px,.52vw,16px);--radius:clamp(28px,3.65vw,90px);--display:clamp(36px,3.65vw,84px);--bar:clamp(38px,2.82vw,62px);--view:100vh;--view:100svh;--gap:4px}
 :root{--surface-ease:ease;--reveal-ease:cubic-bezier(.32,0,.28,1)}
-@property --roof-y{syntax:"<length>";inherits:false;initial-value:0px}
 *{box-sizing:border-box}
 /* Only the new screen is clipped. Both snapshots stay in viewport coordinates. */
 ::view-transition-group(root),::view-transition-old(root),::view-transition-new(root){
@@ -634,8 +633,7 @@ dialog::backdrop{background:#17191866}
   .opening-copy h1{font:500 calc(70 * var(--art))/1 Archivo,sans-serif;letter-spacing:-.04em}
   .opening-copy .subtitle{margin:0;width:calc(304 * var(--art));max-width:100%;font-size:calc(18 * var(--art));line-height:1.2;letter-spacing:-.01em}
   #shape-title h2,.mask-title h2{font:500 calc(50 * var(--art))/1 Archivo,sans-serif;letter-spacing:-.04em}
-  #shape-title h2{max-width:8em;translate:0 calc(-10 * var(--art))}
-  :is(#wall-title,#build-title) h2{translate:0 calc(-35 * var(--art))}
+  #shape-title h2{max-width:8em}
   .model-frame{aspect-ratio:3/2;transform:translate(-50%,-50%)}
   .interior-frame{inset:var(--interior-gap)}
   .interior-card{
@@ -712,7 +710,6 @@ dialog::backdrop{background:#17191866}
   .opening-copy h1{font-size:calc(40 * var(--art))}
   .opening-copy .subtitle{width:calc(278 * var(--art));font-size:calc(16 * var(--art));line-height:1.25}
   #shape-title h2,.mask-title h2{font-size:calc(32 * var(--art))}
-  #shape-title h2{translate:0 calc(-18 * var(--art))}
   :is(#wall-title,#build-title) h2{translate:none}
   #plans-cards{--card-width:calc(344 * var(--art));--start:calc((100% - var(--card-width)) / 2);bottom:calc(10 * var(--u));gap:calc(4 * var(--u))}
   #plans-cards .plan-card{grid-template-columns:minmax(0,1fr);border-radius:calc(60 * var(--u))}
@@ -808,7 +805,7 @@ dialog::backdrop{background:#17191866}
 
 @media (max-width:600px) and (orientation:portrait){
   :root{--portrait-mark:120px}
-  footer{--footer-nav:max(7.1%,calc(var(--portrait-bar) + 10px));height:100dvh}
+  footer{--footer-nav:max(7.1%,calc(var(--portrait-bar) + 10px));height:var(--stage-view,100dvh)}
   .mast:not(.is-compact) .bar .micro{font-size:13px;line-height:1.25}
   .interior-card{width:calc(100% - 20px);bottom:10px;height:auto;min-height:calc(169 * var(--art))}
   .interior-copy{gap:calc(30 * var(--art))}
@@ -840,7 +837,7 @@ dialog::backdrop{background:#17191866}
     height:100%;
     bottom:auto;
   }
-  .construction{--build-y:min(var(--build-u), 100dvh / 600)}
+  .construction{--build-y:min(var(--build-u), var(--stage-view,100dvh) / 600)}
   .construction .process-frame{bottom:calc(266 * var(--build-y) + 2 * var(--build-gap))}
   .construction .process-card{padding-block:calc(40 * var(--build-y))}
   .construction .process-kicker{font-size:calc(12 * var(--build-u))}
@@ -849,13 +846,13 @@ dialog::backdrop{background:#17191866}
 }
 /* Focus the subject of each photo inside the portrait gallery. */
 @media (max-width:1024px) and (orientation:portrait){
-  #interior-images .slide-image{object-position:var(--interior-focus)}
-  #interior-images > :nth-child(1){--interior-focus:50% 67%}
-  #interior-images > :nth-child(2){--interior-focus:35% center}
-  #interior-images > :nth-child(3){--interior-focus:66% center}
-  #interior-images > :nth-child(4){--interior-focus:63% center}
-  #interior-images > :nth-child(5){--interior-focus:35% center}
-  #interior-images > :nth-child(6){--interior-focus:58% center}
+  #interior-images .slide-image{object-position:var(--interior-focus);background:var(--preview) var(--interior-focus) / cover;color:transparent}
+  #interior-images > :nth-child(1){--preview:url("data:image/webp;base64,UklGRiYBAABXRUJQVlA4IBoBAACwBwCdASogACUAPtFkpk8oJaMiKrgIAQAaCWUAwfwadACdOY2i5nUyzy2TL4hB+8tvdlwkX3FZKLnDXkIkmeGG17NkjBMAAP7fQS4SeJkJiBf5WRT0PdFigw6kOEOLC6pRn46fqHsVt5sysGrMfBXdRbr9OPB33kxcFVo+rLw/SJ4lktL97GCS1LXFvN7JnsMoKfpCjQefdZ8qu/RqBbFJ+mudbptwpprE3QgKkADpAAIcXOTPPn6XctFIdTJMX/hqgK7HWCQnMAXLPBjeCEwp6tOsJh+BydSpHEQ0q2w5BH8XTUlCmRAgN3eDucX4d6ptuwF13f0Xuzwu4jvKWRp+dbLarWQCdiO5Tp5OqvBJlyebnFm9P81XpAA=");--interior-focus:50% 67%}
+  #interior-images > :nth-child(2){--preview:url("data:image/webp;base64,UklGRi4BAABXRUJQVlA4ICIBAABwBgCdASogACUAPsVUpEunpSOhsAqo8BiJZQCkhbJAyV7iWEOqRwZp2Dp6tjt4lBJ3S2W+2BRQ+YWbHSAA9x7lT06s8fD++FVpft4B3VV656VSbLJr6fBHkigKIoQmJi+VImv8YPMawfFpxvpwK7/TdTYNPhZWU/0Ge5McMg1nSgg2vurAUwcAGlQdTPYBGXQPwkv8UpKMaG1apznuSnFJEk7GXXfNk9tXmOxiOVcBPzaCNwwL7IX7+cqnzOLgNNy58FjgptV4lWYCeFuC8bvLniDuLYSXRgAFzcHaL+tPPq5H2L9PNcPlIDJriMQfg9gmyuoVPk80RsSDdYwNsSM+0/XoLnRTbQ+7lJhmQqZ7s0ZELZUsp0F37HU4IF4JrJTkAA==");--interior-focus:35% center}
+  #interior-images > :nth-child(3){--preview:url("data:image/webp;base64,UklGRuQAAABXRUJQVlA4INgAAADQBgCdASogACUAPslMoUunpCMhsBqtUPAZCWUAxkA0Ydh5gZV5wlj2mWZPlrYI4s2H492P+JJ/BGxdi03CYAAA/uqW4rGwaCINMFOqWg2UhPWauLcPoaGi9Utk7zpHxkKqfDdsECs0vxIZxFq6LljQuVwRs3QoWrbonHLzuTttedhO4PhTqu3FeQW+ab9ODSaJcrt4n8t04/UN5sJ7O4OK793wPwrFoR7Bx887L0mG/0vwoEVRZodV8bnpXzBkzt4f6gJeRLgS7kvdJomT1BOSbOf12iAAAAA=");--interior-focus:66% center}
+  #interior-images > :nth-child(4){--preview:url("data:image/webp;base64,UklGRjYBAABXRUJQVlA4ICoBAAAQBwCdASogACUAPtFapk0oJSOiKrgMAQAaCWUAuzP8Z34d+Hgpsa3P9i4EgJpfIvtXtjc7lL2j6v1dXmLh/kJjWAD9/MVV8ut4t8Q+4qYwzq+hD99OuxzQRMRoOM9umXJg6T+t+WeSRqf0ZYmfxq6xfGsqahdS4i0Y0z4BKY/IxkOVzg0RZIyBCvYhjaqRS7bfi5ijyCGSYYNgTce4Iy3R4czoZkmBtrReer9vvWppsS7832GfxkYEpFV3ETS1Zzn9PPRAmqu5ODQ4IztfSlvp9Mn1QObrtMNVC0vJiKRideMOwL8pfPrkjJ2EhjGfl7RbXrD1fGAvt+qkOhiAwe7EFPocnNyw2JS1cOmLzW6Ew5Yms0EUqsJ2h8ehUWeyeDhVljEtAmWngAAA");--interior-focus:63% center}
+  #interior-images > :nth-child(5){--preview:url("data:image/webp;base64,UklGRuIAAABXRUJQVlA4INYAAABwBgCdASogACUAPtFkqE8oJaOiKrgIAQAaCWUAwQvAgY4a+r8HcaGGYmiwNfn0s2TFg6PPu92msC5omCAA/tTzZ1zdR3G4n8ynr8/hrvlRy2r/qQt9Jv0XLWtnywyiyCMaJF9kgnXvWn09UsCjlOsJV3zTr5fSxGtyZfHn6d0nWh1a9QpFv49hVKfYqd9EEf68fRuWCRrCkT0adGL80oZory1noFxWlC62WfuWy9k+/VdTZii5gStMDE7gVS3qmupqGdHErkLqYw+9/yKMOeK4cdTlhgAA");--interior-focus:35% center}
+  #interior-images > :nth-child(6){--preview:url("data:image/webp;base64,UklGRugAAABXRUJQVlA4INwAAACQBgCdASogACUAPtFgqlAoJSOipWmZABoJZQC2FCMT+za0IQ6vsv5mIao1skeAXpRXqDTgwJfeabA8d3twAP7hv01dxdVItlNw/TVdagUDILOVpOIK7tx43myOuPJI9/lJquiUor2JmDWgQP3nDbFPIx6dXVB9+cpS84EYrOqyUWMAsv47ulGiII26EZb1TJ/snPkYtEO+E70c5pyhAOcZrxC5zon3M/+p8O4/ECgf9YFTZEgoykMY93Fxk7DeCuTbpp3u162IjKfRcSUBoyvjNGaln9IbUp4/gAAA");--interior-focus:58% center}
 }
 
 @media (min-width:601px) and (max-width:1024px) and (orientation:portrait){
@@ -884,7 +881,7 @@ dialog::backdrop{background:#17191866}
   .viewport:has(.interiors.live){touch-action:pan-y pinch-zoom}
 }
 
-@media (max-width:600px) and (orientation:portrait) and (prefers-reduced-motion:no-preference){
+@media (max-width:1024px) and (orientation:portrait) and (pointer:coarse) and (prefers-reduced-motion:no-preference){
   /* Keep the opening house on its scroll trajectory during the first swipe. */
   .hero.first-visit .hero-house{animation-name:appear}
 }
