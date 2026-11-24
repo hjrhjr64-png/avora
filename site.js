@@ -642,16 +642,31 @@ function houseTransform(scale, y) {
   return 'translate3d(' + (width - 1920 * scale) / 2 + 'px,' + y + 'px,0) scale(' + scale + ')';
 }
 let openingHouseAnimation;
-function measureOpeningHouse() {
+const phoneCopyCenter = () => height * .445 + 8.92 * width / 390;
+const copyTravel = () => clamp(width * .036, 28, 78);
+const copyTransform = center => 'translate3d(-50%,calc(' + center + 'px - 50%),0)';
+let openingCopyAnimations = [];
+function measureOpeningMotion() {
+  for (const animation of openingCopyAnimations) animation.cancel();
+  openingCopyAnimations = [];
   openingHouseAnimation?.cancel();
   openingHouseAnimation = null;
   if (!adaptiveLayout.matches || !touchViewport.matches || motion.matches ||
       !window.ScrollTimeline || !CSS.supports('animation-range', '0px 300px')) return;
+  const timeline = new ScrollTimeline({source:document.scrollingElement});
   openingHouseAnimation = pullback.animate([
     {transform:houseTransform(portraitOpeningScale(), portraitRoofOffset())},
     {transform:houseTransform(panoramaWidth / 1920, (height - panoramaWidth * 9 / 16) / 2)}
-  ], {timeline:new ScrollTimeline({source:document.scrollingElement}), rangeStart:'0px',
+  ], {timeline, rangeStart:'0px',
     rangeEnd:scrollAt(1.82) + 'px', fill:'both', easing:'cubic-bezier(.333333,.083333,.666667,.883333)'});
+  if (width > 600) return;
+  const center = phoneCopyCenter();
+  const timing = {timeline, rangeStart:'0px', fill:'both', easing:'cubic-bezier(.333333,0,.666667,1)'};
+  openingCopyAnimations = [
+    intro.animate([{transform:copyTransform(center)}, {transform:copyTransform(center + copyTravel())}],
+      {...timing, rangeEnd:scrollAt(.5) + 'px'}),
+    intro.animate([{opacity:1}, {opacity:0}], {...timing, rangeEnd:scrollAt(.63) + 'px'})
+  ];
 }
 function heroAndVillage(t, openingHeaderBottom) {
   const panoramaStart = 1.7, frontMatch = 1.82, exitStart = 3.82, exitEnd = exitStart + overlapSpan;
@@ -687,14 +702,16 @@ function heroAndVillage(t, openingHeaderBottom) {
     if (fade < .25 && mast.classList.contains('skip-intro')) {
       for (const [node, delay] of heroText) playTextReveal(node, {delay});
     }
-    const openingRoof = roofOffset + 274 * openingScale;
-    const copyCenter = adaptiveLayout.matches
-      ? mobile ? openingHeight * .445 + 8.92 * width / 390 : openingHeight / 2 - 64 * width / 768
-      : Math.min((openingHeaderBottom + roofY) / 2,
-      openingRoof - (heroCopyHeight || intro.offsetHeight) / 2 - Math.max(18, width * .018));
-    const descent = motion.matches ? 0 : step(t, 0, .5) * clamp(width * .036, 28, 78);
-    intro.style.transform = 'translate3d(-50%,calc(' + (copyCenter + descent) + 'px - 50%),0)';
-    intro.style.opacity = 1 - fade;
+    if (!openingCopyAnimations.length) {
+      const openingRoof = roofOffset + 274 * openingScale;
+      const copyCenter = adaptiveLayout.matches
+        ? mobile ? phoneCopyCenter() : openingHeight / 2 - 64 * width / 768
+        : Math.min((openingHeaderBottom + roofY) / 2,
+        openingRoof - (heroCopyHeight || intro.offsetHeight) / 2 - Math.max(18, width * .018));
+      const descent = motion.matches ? 0 : step(t, 0, .5) * copyTravel();
+      intro.style.transform = copyTransform(copyCenter + descent);
+      intro.style.opacity = 1 - fade;
+    }
   }
   if (visible('panorama', t >= panoramaStart && t < exitEnd)) {
     if (fullWidth < panoramaCover) {
@@ -1480,7 +1497,7 @@ function measure() {
   planUnit = usesPlanRail() ? unit * .82 : unit + widePlanSpacing * (widePitch / cardPitch - unit);
   buildEntryStretch = .75;
   story.style.height = 'calc(' + scrollAt(END) + 'px + var(--stage-view,var(--view)))';
-  measureOpeningHouse();
+  measureOpeningMotion();
   for (const [id, time] of chapters) document.getElementById(id).style.top = Math.round(scrollAt(time)) + 'px';
   if (previousTime !== null && previousTime <= END) {
     window.scrollTo({top:scrollAt(previousTime), behavior:'instant'});
@@ -2048,7 +2065,7 @@ window.addEventListener('resize', () => {
 adaptiveLayout.addEventListener('change', measure);
 landscapePlans.addEventListener('change', measure);
 document.addEventListener('visibilitychange', schedule);
-motion.addEventListener('change', () => { measureMastMotion(); measureOpeningHouse(); schedule(); });
+motion.addEventListener('change', () => { measureMastMotion(); measureOpeningMotion(); schedule(); });
 observeSmoothCorners(all([
   '.plan-card', '.plan-stats > div', '.drawing', '#interior-images .slide-image', '.interior-card',
   '.wall-card', '.process-frame', '.process-card', '.contact-film', '#enquiry-form',
