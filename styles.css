@@ -800,7 +800,7 @@ dialog::backdrop{background:#17191866}
 
 @media (max-width:600px) and (orientation:portrait){
   :root{--portrait-mark:120px}
-  footer{--footer-nav:max(7.1%,calc(var(--portrait-bar) + 10px))}
+  footer{--footer-nav:max(7.1%,calc(var(--portrait-bar) + 10px));height:100dvh}
   .mast:not(.is-compact) .bar .micro{font-size:13px;line-height:1.25}
   .interior-card{width:calc(100% - 20px);bottom:10px;height:auto;min-height:calc(169 * var(--art))}
   .interior-copy{gap:calc(30 * var(--art))}
