@@ -164,13 +164,34 @@ class ScrubFilm {
     this.masters.set(index, image);
     this.stills.set(index, this.matte.warmStill(image, this.rasterWidth));
   }
-  loadOnline() {
-    this.loading ??= this.prepare(true).then(schedule, () => {
+  loadOnline(preload) {
+    return this.loading ??= this.prepare(true, preload).then(schedule, () => {
       this.failed = true;
       schedule();
     });
   }
-  async prepare(online = false) {
+  async preloadMovie({signal, progress}) {
+    const response = await fetch(this.remoteVideo, {signal});
+    if (!response.ok) throw new Error('Unavailable film ' + this.remoteVideo);
+    const size = Number(response.headers.get('Content-Length'));
+    if (!response.body || !size || response.headers.has('Content-Encoding')) {
+      this.blob = await response.blob();
+      return;
+    }
+    const bytes = new Uint8Array(size);
+    const reader = response.body.getReader();
+    let received = 0;
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      bytes.set(value, received);
+      received += value.length;
+      progress(received / size);
+    }
+    if (received !== size || received < this.starts.at(-1)) throw new Error('Incomplete film');
+    this.bytes = bytes;
+  }
+  async prepare(online = false, preload) {
     const manifestPath = this.path + '.json';
     const [blob, manifest] = await Promise.all([
       online ? null : cachedMedia(this.path + '.mp4'),
@@ -189,6 +210,10 @@ class ScrubFilm {
     if (online) {
       this.remoteVideo = this.path + '.mp4';
       this.groups = new Map();
+      if (preload) {
+        try { await this.preloadMovie(preload); }
+        catch { /* Keep range and still-image playback available after an interrupted download. */ }
+      }
     }
     await Promise.allSettled(
       Object.entries(this.stillPaths).map(async ([index, path]) => {
@@ -214,7 +239,10 @@ class ScrubFilm {
       };
       if (!window.VideoDecoder || !(await VideoDecoder.isConfigSupported(config)).supported)
         throw new Error('native seek');
-      if (blob) this.bytes = new Uint8Array(await blob.arrayBuffer());
+      if (this.blob) {
+        this.bytes = new Uint8Array(await this.blob.arrayBuffer());
+        if (online) this.blob = null;
+      }
       this.config = config;
     } catch {
       try {
@@ -234,7 +262,13 @@ class ScrubFilm {
     await new Promise((resolve, reject) => {
       v.onloadeddata = resolve;
       v.onerror = reject;
-      v.src = this.remoteVideo ?? URL.createObjectURL(this.blob);
+      const local = this.blob ?? (this.bytes && new Blob([this.bytes], {type:'video/mp4'}));
+      v.src = local ? URL.createObjectURL(local) : this.remoteVideo;
+      if (local && this.remoteVideo) {
+        // The object URL owns the compressed movie during native seeking.
+        this.bytes = null;
+        this.blob = null;
+      }
     });
     this.nativeIndex = 0;
     v.onseeked = () => {
@@ -393,7 +427,7 @@ class ScrubFilm {
     } else if (this.config) {
       const frame = this.frames.get(index);
       if (!frame) this.decodeGroup(index);
-      if (!frame && this.remoteVideo && (!this.shown || this.shown.frame))
+      if (!frame && !this.bytes && this.remoteVideo && (!this.shown || this.shown.frame))
         this.setImage(folder, position, total, paint);
       if (paint && (this.shown?.index !== index || this.shown.frame)) {
         if (frame) this.paint(frame, folder, index);

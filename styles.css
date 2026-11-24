@@ -814,6 +814,25 @@ dialog::backdrop{background:#17191866}
   .opening-copy .subtitle,.plan-intro p,.interior-copy p,#interior-count,
   .wall-card p,.process-description,.process-kicker,#build-count,.form-head p{font-size:14px}
 }
+/* Keep the scroll timeline on svh. The construction photo absorbs changes
+   in available Safari height while the card retains its artboard geometry. */
+@media (max-width:600px) and (orientation:portrait){
+  .viewport:has(.construction.live){
+    overflow:visible;
+    clip-path:inset(0 0 calc(var(--view) - 100dvh) 0);
+  }
+  .construction{
+    --build-y:min(var(--build-u), 100dvh / 600);
+    --build-vgap:var(--build-gap);
+    height:100dvh;
+    bottom:auto;
+  }
+  .construction .process-frame{bottom:calc(266 * var(--build-y) + 2 * var(--build-gap))}
+  .construction .process-card{padding-block:calc(40 * var(--build-y))}
+  .construction .process-kicker{font-size:calc(12 * var(--build-u))}
+  .construction .process-description{font-size:calc(16 * var(--build-u));margin-top:calc(20 * var(--build-y))}
+  .construction .build-controls{gap:calc(20 * var(--build-y))}
+}
 /* Focus the subject of each photo inside the portrait gallery. */
 @media (max-width:1024px) and (orientation:portrait){
   #interior-images .slide-image{object-position:var(--interior-focus)}

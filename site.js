@@ -366,8 +366,11 @@ function interleavedAsset(folder, index, samples = 2, extension = 'webp') {
   if (offset * 2 === samples) return sequenceAsset(intermediate, base, extension);
   return intermediate + '/' + String(base).padStart(4, '0') + '-q' + offset + '.' + extension;
 }
+const panoramaPixels = Math.max(innerWidth, innerHeight * 16 / 9) * devicePixelRatio;
+const landscapePanorama = !packagedMedia && !compactMedia && panoramaPixels <= 1920
+  ? scrubPath('village', '1080') : scrubPath('village');
 const villagePath = compactMedia && adaptiveLayout.matches ? 'assets/film/panorama-phone'
-  : adaptiveLayout.matches ? 'assets/film/panorama' : scrubPath('village');
+  : adaptiveLayout.matches ? 'assets/film/panorama' : landscapePanorama;
 const villageFolder = adaptiveLayout.matches ? 'assets/film/panorama-frames' : 'assets/film/panorama-frames-1440';
 const village = new ScrubFilm(villageCanvas,{path:villagePath,
   fallback:{asset:(folder,index) => sequenceAsset(folder,index,'jpg')}});
@@ -422,9 +425,19 @@ const wall = new ScrubFilm($('#wall-sequence'),{
 });
 const frameSequences = [village, house, facadePose, wall];
 
+// WebKit can ignore the source rectangle when drawImage crops a VideoFrame.
+const facadeAtlas = document.createElement('canvas');
 function drawFacade(ctx, image, center) {
   const {centerY, pitchX, pitchY, scale} = facadeLayout;
-  const sourceScale = (image.displayWidth || image.videoWidth || image.naturalWidth) / 1920;
+  if (image.displayWidth) {
+    if (facadeAtlas.width !== image.displayWidth || facadeAtlas.height !== image.displayHeight) {
+      facadeAtlas.width = image.displayWidth;
+      facadeAtlas.height = image.displayHeight;
+    }
+    facadeAtlas.getContext('2d').drawImage(image, 0, 0);
+    image = facadeAtlas;
+  }
+  const sourceScale = (image.videoWidth || image.naturalWidth || image.width) / 1920;
   ctx.clearRect(0,0,width,height);
   if (facadeLayout.centers) {
     facadeLayout.centers.forEach(([x, y], i) => {
@@ -1957,13 +1970,13 @@ if (location.hash && document.getElementById(location.hash.slice(1))) document.g
 render();
 
 function prepareOnlineMedia(t) {
-  if (!village.loading && t > .18 && t < 5.25) {
+  if (t > .18 && t < 5.25 && !scenes.panorama.style.getPropertyValue('--panorama-poster')) {
     loadImage($('.village-still img'));
     scenes.panorama.style.setProperty('--panorama-poster', `url("${sequenceAsset(villageFolder, 1, 'jpg')}")`);
     village.loadOnline();
   }
   if (!house.loading && t > 4.15 && t < 18.15) house.loadOnline();
-  if (!facadePose.loading && t > 12.75 && t < 19.05) {
+  if (t > 12.75 && t < 19.05 && !field.style.getPropertyValue('--facade-atlas')) {
     field.style.setProperty('--facade-atlas', `url("${facadePoster}")`);
     facadePose.loadOnline();
   }
@@ -2002,15 +2015,25 @@ const openingFonts = () => [
   document.fonts.load('600 12px "Geist Mono"')
 ];
 
-async function warmOpening(onProgress) {
+async function warmOpening(onProgress, signal) {
   const t = timeAt(scrollY);
   const images = t >= interiorEntry && t < interiorEnd ? [interiors[interiorGallery.at(t)]]
     : t >= buildEntry && t < filmArrival ? [stages[buildAt(t)]] : [pullback];
   images.forEach(loadImage);
   if (t >= filmArrival) forestFilm.poster = contactPoster;
   const work = [...images.map(image => image.decode()), ...openingFonts()];
-  let finished = 0;
-  await Promise.allSettled(work.map(task => task.finally(() => onProgress(++finished / work.length))));
+  // The four selected films drive the scroll timeline. Keep their compressed
+  // bytes, and decode only a small window of frames around the current pose.
+  const progress = new Array(frameSequences.length + 1).fill(0);
+  function update(index, fraction) {
+    progress[index] = fraction;
+    onProgress(progress.reduce((sum, value) => sum + value, 0) / progress.length);
+  }
+  const films = frameSequences.map((sequence, index) =>
+    sequence.loadOnline({signal, progress:fraction => update(index, fraction)})
+      .finally(() => update(index, 1)));
+  await Promise.allSettled([...films, Promise.allSettled(work).then(() => update(frameSequences.length, 1))]);
+  if (!signal.aborted && village.bytes && village.config) village.decodeGroup(0);
 }
 
 async function warmMedia(onProgress, signal) {
@@ -2047,10 +2070,10 @@ async function warmMedia(onProgress, signal) {
   scenes.panorama.style.setProperty('--panorama-poster', 'url("' + panoramaUrl + '")');
   // Keep one decoded entry pose for each sequence. The rest stay compressed.
   await Promise.allSettled([
-    village.prepare(villageFolder, 1),
-    house.prepare(orbitFolder, 1),
-    facadePose.prepare(facadeFolder, 1),
-    wall.prepare(wallFolder, 1),
+    village.prepare(),
+    house.prepare(),
+    facadePose.prepare(),
+    wall.prepare(),
     firstVideoFrame(filmUrl)
   ]);
 }
