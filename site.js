@@ -1528,7 +1528,9 @@ function animateToTime(time, duration, gallery = null, slide = null, curve = scr
   let start = performance.now(), lastY = from;
   function advance(now) {
     if (Math.abs(window.scrollY - lastY) > 1) {
-      if (!selectedSlide?.nativeRelease) return interruptScroll();
+      const owner = selectedSlide?.nativeRelease;
+      if (!owner || owner !== nativeTouchRange || window.scrollY < owner.min - 1 ||
+          window.scrollY > owner.max + 1) return interruptScroll();
       // A quick second touch can already belong to the native compositor.
       // Let its final momentum frames land, then settle from that position.
       from = lastY = window.scrollY;
@@ -1749,21 +1751,22 @@ function handleReadingTouch(event) {
   }
   const origin = readingOrigin(finger.scrollY, Math.sign(dy));
   const stop = nextReadingStop(origin, dy, finger.groups);
-  if ((!stop || stop.entry) && origin === finger.scrollY) return;
+  if ((!stop || stop.entry) && origin === finger.scrollY) {
+    interruptScroll();
+    return;
+  }
   if (event.cancelable) event.preventDefault();
   if (Math.abs(dy) < touchStepThreshold || (!event.cancelable && !releasing)) return;
   const nativeRelease = !event.cancelable && releasing;
   if (!nativeRelease) nativeTouchRange = null;
   finger.handled = true;
   finishReadingInput(stop, origin, dy, true);
-  if (nativeRelease && selectedSlide) {
-    selectedSlide.nativeRelease = true;
+  if (nativeRelease && selectedSlide && nativeTouchRange) {
+    selectedSlide.nativeRelease = nativeTouchRange;
     // A second gesture can select a further stop before the first finishes.
     const target = Math.round(scrollAt(stop?.time ?? timeAt(origin)));
-    if (nativeTouchRange) {
-      nativeTouchRange.min = Math.min(target, nativeTouchRange.min);
-      nativeTouchRange.max = Math.max(target, nativeTouchRange.max);
-    }
+    nativeTouchRange.min = Math.min(target, nativeTouchRange.min);
+    nativeTouchRange.max = Math.max(target, nativeTouchRange.max);
   }
 }
 let readingTouchRegion = false;
@@ -1777,6 +1780,8 @@ function updateReadingTouchRegion(t) {
   else window.removeEventListener('touchmove', handleReadingTouch);
 }
 window.addEventListener('touchstart', event => {
+  // A new finger ends the previous native fling, even on a field or the footer.
+  if (selectedSlide?.nativeRelease) interruptScroll();
   wheelGesture = finger = nativeTouchRange = null;
   if (event.defaultPrevented || event.touches.length !== 1 ||
       document.querySelector('dialog[open]')) return;
@@ -1786,7 +1791,7 @@ window.addEventListener('touchstart', event => {
   nativeTouchRange = nativeRangeAt(y, groups);
   const group = groups.find(times => y >= Math.round(scrollAt(times[0])) - 1 &&
     y <= Math.round(scrollAt(times.at(-1))) + 1);
-  if (!group) return;
+  if (!group) { interruptScroll(); return; }
   const touch = event.touches[0];
   finger = {x:touch.clientX, y:touch.clientY, scrollY:y, groups, group,
     position:group === interiorStops ? interiorPosition(timeAt(y)) : 0};
