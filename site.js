@@ -88,6 +88,7 @@ const story = $('#story');
 const viewport = $('.viewport');
 const menu = $('#menu');
 const mast = $('#mast');
+const mastBar = mast.querySelector('.bar');
 const brand = $('.brand');
 const intro = $('.hero-copy');
 const pullback = $('#pullback');
@@ -544,8 +545,8 @@ function header(t, y) {
   const gap = (width - 2 * edge - fullWidths.reduce((a, b) => a + b, 0)) / 4;
   let left = edge;
   const openingBarTop = adapted ? (phone ? 51.106 : 80) * headerUnit : top + large + (portrait ? 12 : edge);
-  mast.style.setProperty('--brand-bottom', openingBarTop * (1 - progress) + 'px');
-  mast.style.setProperty('--top-rule-opacity', 1 - ease(range(fraction, 0, .22)));
+  mastBar.style.transform = 'translateY(' + openingBarTop * (1 - progress) + 'px)';
+  mastBar.style.setProperty('--top-rule-opacity', 1 - ease(range(fraction, 0, .22)));
   const scale = 1 + (compact / large - 1) * progress;
   logo.forEach((img, i) => {
     const x = left + (compactLogo.x + compactWidth * smallLeft[i] - left) * progress;
@@ -599,43 +600,48 @@ function heroAndVillage(t, openingHeaderBottom) {
   if (t >= exitEnd && t < 5.12) village.set(villageFolder,121,121,false);
   const mobile = width <= 600;
   const fullWidth = panoramaWidth;
+  // The toolbar changes the visible height mid-swipe. Keep the opening
+  // and the first panorama pose on the same stable vertical center.
+  const openingHeight = adaptiveLayout.matches ? height : visibleStageHeight;
   if (visible('hero', t < 2.1)) {
     const progress = motion.matches ? Number(t > .9)
       : step(t, 0, frontMatch, x => x * (.25 + x * (2.15 - 1.4 * x)));
     const openingWidth = portrait ? width * (mobile ? 1.17 : 1.12) : width;
     // The reference shows 496px of the facade below the roof in a 1920×1080 frame.
-    const roofY = portrait ? visibleStageHeight * (mobile ? 1.01 : 1) - openingWidth * 496 / 1920
+    const roofY = portrait ? openingHeight * (mobile ? 1.01 : 1) - openingWidth * 496 / 1920
                            : Math.max(visibleStageHeight * 584 / 1080, visibleStageHeight - openingWidth * 496 / 1920);
     const openingScale = adaptiveLayout.matches ? (mobile ? 755 / 390 : 1505 / 768) * width / 1920 : (openingWidth / 1920) * (1688 / 960);
     const fullScale = fullWidth / 1920;
     const scale = openingScale + (fullScale - openingScale) * progress;
     const roofOffset = adaptiveLayout.matches
-      ? mobile ? 1.03 * visibleStageHeight - 258.32 * width / 390 : visibleStageHeight - 442 * width / 768
+      ? mobile ? 1.03 * openingHeight - 258.32 * width / 390 : openingHeight - 442 * width / 768
       : roofY - 276 * openingScale;
-    const fullTop = (visibleStageHeight - fullWidth * 9 / 16) / 2;
+    const fullTop = (openingHeight - fullWidth * 9 / 16) / 2;
     const y = roofOffset + (fullTop - roofOffset) * progress;
     const imageTransform = 'translate3d(' + (width - 1920 * scale) / 2 + 'px,' + y + 'px,0) scale(' + scale + ')';
-    pullback.style.transform = heroGround.style.transform = imageTransform;
+    pullback.style.transform = imageTransform;
+    if (!adaptiveLayout.matches) heroGround.style.transform = imageTransform;
     const fade = heroCopyFade(t);
     if (fade < .25 && mast.classList.contains('skip-intro')) {
       for (const [node, delay] of heroText) playTextReveal(node, {delay});
     }
-    const roof = y + 274 * scale;
     const openingRoof = roofOffset + 274 * openingScale;
     const copyCenter = adaptiveLayout.matches
-      ? mobile ? visibleStageHeight * .445 + 8.92 * width / 390 : visibleStageHeight / 2 - 64 * width / 768
+      ? mobile ? openingHeight * .445 + 8.92 * width / 390 : openingHeight / 2 - 64 * width / 768
       : Math.min((openingHeaderBottom + roofY) / 2,
       openingRoof - (heroCopyHeight || intro.offsetHeight) / 2 - Math.max(18, width * .018));
     const descent = motion.matches ? 0 : step(t, 0, .5) * clamp(width * .036, 28, 78);
     intro.style.transform = 'translate3d(-50%,calc(' + (copyCenter + descent) + 'px - 50%),0)';
     intro.style.opacity = 1 - fade;
-    scenes.hero.style.setProperty('--roof-y', roof + 'px');
+    scenes.hero.style.setProperty('--roof-y', y + 274 * scale + 'px');
   }
   if (visible('panorama', t >= panoramaStart && t < exitEnd)) {
     if (fullWidth < panoramaCover) {
       const scale = fullWidth / panoramaCover;
-      const zoom = scale + (1 - scale) * surface(t, 2.32, 3.28);
-      villageCanvas.style.transform = 'translate3d(-50%,-50%,0) scale(' + zoom + ')';
+      const fill = surface(t, 2.32, 3.28);
+      const zoom = scale + (1 - scale) * fill;
+      const offset = (openingHeight - visibleStageHeight) * (1 - fill) / 2;
+      villageCanvas.style.transform = 'translate3d(-50%,calc(-50% + ' + offset + 'px),0) scale(' + zoom + ')';
     }
     if (adaptiveLayout.matches) scenes.panorama.style.setProperty('--still',step(t,3.74,3.82));
     const leave = referenceTravel(t, exitStart, exitEnd);
@@ -1267,6 +1273,7 @@ function render() {
     }
   }
   current = timeAt(y);
+  updateReadingTouchRegion(current);
   if (!packagedMedia) prepareOnlineMedia(current);
   const openingHeaderBottom = header(current, y);
   heroAndVillage(current, openingHeaderBottom);
@@ -1512,15 +1519,25 @@ const interiorStops = Array.from({length:interiorLast + 1}, (_, index) => interi
 
 function animateToTime(time, duration, gallery = null, slide = null, curve = scrollEase) {
   interruptScroll();
-  const from = window.scrollY, to = Math.round(scrollAt(time));
+  let from = window.scrollY;
+  const to = Math.round(scrollAt(time));
   if (from === to || !duration || motion.matches) {
     window.scrollTo({top:to,behavior:'instant'});
     return;
   }
-  const start = performance.now();
-  let lastY = from;
+  let start = performance.now(), lastY = from;
   function advance(now) {
-    if (Math.abs(window.scrollY - lastY) > 1) return interruptScroll();
+    if (Math.abs(window.scrollY - lastY) > 1) {
+      if (!selectedSlide?.nativeRelease) return interruptScroll();
+      // A quick second touch can already belong to the native compositor.
+      // Let its final momentum frames land, then settle from that position.
+      from = lastY = window.scrollY;
+      start = now + 70;
+    }
+    if (now < start) {
+      selectedSlide.frame = requestAnimationFrame(advance);
+      return;
+    }
     const progress = range(now, start, start + duration);
     window.scrollTo({top:from + (to - from) * curve(progress),behavior:'instant'});
     lastY = window.scrollY;
@@ -1554,8 +1571,8 @@ function usesInstantReadingEntry(stop) {
 
 // Outside a gallery, native input owns the page up to its actual boundary.
 // Within it, choose the next authored reading pose in the gesture direction.
-function nextReadingStop(y, delta) {
-  for (const times of delta > 0 ? readingGroups : readingGroups.toReversed()) {
+function nextReadingStop(y, delta, groups = readingGroups) {
+  for (const times of delta > 0 ? groups : groups.toReversed()) {
     const first = Math.round(scrollAt(times[0])), last = Math.round(scrollAt(times.at(-1)));
     if (y < first - 1) {
       if (y + delta >= first) return {time:times[0], entry:true};
@@ -1568,13 +1585,14 @@ function nextReadingStop(y, delta) {
     }
   }
 }
-function moveToReadingStop(time) {
+function moveToReadingStop(time, touch = false) {
   const distance = Math.abs(timeAt(window.scrollY) - time);
   const entersBuild = time === buildStart && current < buildStart;
   const entersContact = time > buildTime(buildLast);
   const entersWallTitle = time === wallTitleStop;
-  const duration = entersContact ? contactTravelDuration : entersBuild || entersWallTitle
+  const authoredDuration = entersContact ? contactTravelDuration : entersBuild || entersWallTitle
     ? readingTravelDuration : clamp(distance * referenceSlideDuration, 120, referenceSlideDuration);
+  const duration = touch ? Math.min(authoredDuration, entersContact ? 900 : 520) : authoredDuration;
   const curve = entersContact || entersWallTitle ? scrollEase : entersBuild ? readingTravelEase : surfaceEase;
   const interiorSlide = interiorStops.indexOf(time);
   const wallSlide = wallStops.indexOf(time);
@@ -1582,7 +1600,7 @@ function moveToReadingStop(time) {
     animateToTime(time, duration, interiorGallery, interiorSlide, curve);
   } else if (wallSlide >= 0) {
     const wallDuration = clamp(distance * wallSlideDuration, 180, wallSlideDuration);
-    animateToTime(time, wallDuration, wallGallery, wallSlide, ease);
+    animateToTime(time, touch ? Math.min(wallDuration, 650) : wallDuration, wallGallery, wallSlide, ease);
   } else if (time >= buildStart && time <= buildTime(buildLast)) {
     animateToTime(time, duration, buildGallery, Math.round((time - buildStart) / buildInterval), curve);
   } else animateToTime(time, duration, null, null, curve);
@@ -1613,9 +1631,9 @@ function readingOrigin(y, direction) {
   return time == null ? y : Math.round(scrollAt(time));
 }
 
-function finishReadingInput(stop, origin, delta) {
+function finishReadingInput(stop, origin, delta, touch = false) {
   if (stop?.entry && usesInstantReadingEntry(stop)) animateToTime(stop.time, 0);
-  else if (stop) moveToReadingStop(stop.time);
+  else if (stop) moveToReadingStop(stop.time, touch);
   else if (selectedSlide && origin !== window.scrollY) selectedSlide.exitDelta ??= delta;
 }
 
@@ -1674,10 +1692,12 @@ window.addEventListener('wheel', event => {
   finishReadingInput(stop, origin, direction * gesture.distance);
 }, {passive:false});
 
-// A free swipe belongs to the browser, including its momentum after release.
-// Bound that fling only at the entrance to the next authored reading group.
-function nativeRangeAt(y) {
-  const previous = nextReadingStop(y, -Infinity), next = nextReadingStop(y, Infinity);
+// On touch the wall title and its first layer form one reading sequence.
+function touchReadingGroups() {
+  return [interiorStops, [wallTitleStop, ...wallStops], readingGroups[3]];
+}
+function nativeRangeAt(y, groups) {
+  const previous = nextReadingStop(y, -Infinity, groups), next = nextReadingStop(y, Infinity, groups);
   return {
     min:previous ? Math.round(scrollAt(previous.time)) : -Infinity,
     max:next ? Math.round(scrollAt(next.time)) : Infinity
@@ -1689,36 +1709,94 @@ window.addEventListener('scroll', () => {
   const bounded = clamp(y, nativeTouchRange.min, nativeTouchRange.max);
   if (bounded !== y) window.scrollTo({top:bounded, behavior:'instant'});
 }, {passive:true});
-window.addEventListener('touchstart', event => {
-  wheelGesture = finger = nativeTouchRange = null;
-  if (!acceptsPageGesture(event) || event.touches.length !== 1) return;
-  const touch = event.touches[0];
-  finger = {x:touch.clientX, y:touch.clientY, handled:false};
-  if (!selectedSlide) nativeTouchRange = nativeRangeAt(window.scrollY);
-}, {passive:true});
-window.addEventListener('touchmove', event => {
-  if (!finger || event.touches.length !== 1 || !event.cancelable) return;
-  const touch = event.touches[0], distance = finger.y - touch.clientY;
-  if (!distance || Math.abs(distance) < Math.abs(touch.clientX - finger.x)) return;
-  if (finger.handled) { event.preventDefault(); return; }
-  const y = window.scrollY;
-  const origin = readingOrigin(y, Math.sign(distance));
-  const stop = nextReadingStop(origin, distance);
-  if ((!stop || stop.entry) && origin === y) {
-    interruptScroll();
-    nativeTouchRange ??= nativeRangeAt(y);
-    finger = null;
+
+const touchStepThreshold = 12;
+function handleReadingTouch(event) {
+  if (!finger || event.touches.length > 1) return;
+  const releasing = event.type === 'touchend';
+  const touch = releasing ? event.changedTouches[0] : event.touches[0];
+  if (!touch) return;
+  const dx = finger.x - touch.clientX, dy = finger.y - touch.clientY;
+  if (!finger.axis && Math.max(Math.abs(dx), Math.abs(dy)) >= 5) {
+    finger.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+  }
+  if (!finger.axis) return;
+  if (finger.axis === 'x') {
+    if (finger.group !== interiorStops) return;
+    if (event.cancelable) event.preventDefault();
+    if (!finger.dragged && Math.abs(dx) < touchStepThreshold) return;
+    if (!finger.dragged) {
+      interruptScroll();
+      finger.dragged = true;
+      nativeTouchRange = null;
+    }
+    if (releasing) {
+      const direction = Math.abs(dx) >= touchStepThreshold ? Math.sign(dx) : 0;
+      const target = direction > 0 ? Math.floor(finger.position) + 1
+        : direction < 0 ? Math.ceil(finger.position) - 1 : Math.round(finger.position);
+      moveToReadingStop(interiorTime(clamp(target, 0, interiorLast)), true);
+    } else {
+      const position = clamp(finger.position + clamp(dx / interiorPitch, -1, 1), 0, interiorLast);
+      const index = Math.floor(position), mix = position - index;
+      const t = interiorTime(index) + mix * (interiorTime(Math.min(index + 1, interiorLast)) - interiorTime(index));
+      window.scrollTo({top:scrollAt(t), behavior:'instant'});
+    }
     return;
   }
-  nativeTouchRange = null;
-  event.preventDefault();
-  if (Math.abs(distance) < 24) return;
+  if (finger.handled) {
+    if (event.cancelable) event.preventDefault();
+    return;
+  }
+  const origin = readingOrigin(finger.scrollY, Math.sign(dy));
+  const stop = nextReadingStop(origin, dy, finger.groups);
+  if ((!stop || stop.entry) && origin === finger.scrollY) return;
+  if (event.cancelable) event.preventDefault();
+  if (Math.abs(dy) < touchStepThreshold || (!event.cancelable && !releasing)) return;
+  const nativeRelease = !event.cancelable && releasing;
+  if (!nativeRelease) nativeTouchRange = null;
   finger.handled = true;
-  finishReadingInput(stop, origin, distance);
-}, {passive:false});
-for (const type of ['touchend', 'touchcancel']) {
-  window.addEventListener(type, () => { finger = null; }, {passive:true});
+  finishReadingInput(stop, origin, dy, true);
+  if (nativeRelease && selectedSlide) {
+    selectedSlide.nativeRelease = true;
+    // A second gesture can select a further stop before the first finishes.
+    const target = Math.round(scrollAt(stop?.time ?? timeAt(origin)));
+    if (nativeTouchRange) {
+      nativeTouchRange.min = Math.min(target, nativeTouchRange.min);
+      nativeTouchRange.max = Math.max(target, nativeTouchRange.max);
+    }
+  }
 }
+let readingTouchRegion = false;
+function updateReadingTouchRegion(t) {
+  if (!navigator.maxTouchPoints) return;
+  const active = (t >= interiorEntry && t <= interiorEnd) ||
+    (t >= wallTitleStop - .1 && t <= wallEnd) || (t >= buildStart - .1 && t <= formArrival + .12);
+  if (active === readingTouchRegion) return;
+  readingTouchRegion = active;
+  if (active) window.addEventListener('touchmove', handleReadingTouch, {passive:false});
+  else window.removeEventListener('touchmove', handleReadingTouch);
+}
+window.addEventListener('touchstart', event => {
+  wheelGesture = finger = nativeTouchRange = null;
+  if (event.defaultPrevented || event.touches.length !== 1 ||
+      document.querySelector('dialog[open]')) return;
+  const field = event.target.closest?.('input,textarea,select,[contenteditable="true"]');
+  if (field && (field === document.activeElement || field.scrollHeight > field.clientHeight + 1)) return;
+  const y = window.scrollY, groups = touchReadingGroups();
+  nativeTouchRange = nativeRangeAt(y, groups);
+  const group = groups.find(times => y >= Math.round(scrollAt(times[0])) - 1 &&
+    y <= Math.round(scrollAt(times.at(-1))) + 1);
+  if (!group) return;
+  const touch = event.touches[0];
+  finger = {x:touch.clientX, y:touch.clientY, scrollY:y, groups, group,
+    position:group === interiorStops ? interiorPosition(timeAt(y)) : 0};
+}, {passive:true});
+function finishTouch(event) {
+  if (event.type === 'touchend' && finger) handleReadingTouch(event);
+  finger = null;
+}
+window.addEventListener('touchend', finishTouch, {passive:false});
+window.addEventListener('touchcancel', finishTouch, {passive:true});
 window.addEventListener('keydown', event => {
   nativeTouchRange = null;
   if (!acceptsPageGesture(event) || event.altKey || event.ctrlKey || event.metaKey ||
