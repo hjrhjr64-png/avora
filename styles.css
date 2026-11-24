@@ -68,7 +68,7 @@ h1,h2,.email,.menu-title{font-size:var(--display);letter-spacing:-.04em;line-hei
 @keyframes appear{from{opacity:0}to{opacity:1}}
 @keyframes rise{from{transform:translateY(62%)}to{transform:none}}
 .story{position:relative;height:calc(var(--view)*34);background:var(--paper)}
-.viewport{position:sticky;top:0;width:100%;height:var(--view);overflow:hidden;isolation:isolate}
+.viewport{position:sticky;top:0;width:100%;height:var(--stage-view,var(--view));min-height:var(--view);overflow:hidden;isolation:isolate}
 .anchor{position:absolute;left:0;width:1px;height:1px;pointer-events:none}
 .scene{position:absolute;inset:0;overflow:hidden;visibility:hidden;pointer-events:none}
 .scene.live{visibility:visible}
@@ -304,7 +304,7 @@ footer{
   --footer-gap:calc(16 * var(--footer-u));--footer-nav:14.63%;--footer-social:42.22%;
   --footer-mail:60.83%;--footer-legal:63.89%;
   --footer-side:calc(20 * var(--footer-u));--footer-email-size:calc(70 * var(--footer-u));
-  height:max(var(--view),48vw);position:relative;background:var(--ink);color:var(--paper);overflow:hidden;text-align:center;
+  height:max(var(--stage-view,var(--view)),48vw);position:relative;background:var(--ink);color:var(--paper);overflow:hidden;text-align:center;
 }
 footer nav,.socials{position:absolute;left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:var(--footer-gap)}
 footer nav{top:var(--footer-nav)}.socials{top:var(--footer-social)}
@@ -812,16 +812,24 @@ dialog::backdrop{background:#17191866}
   .opening-copy .subtitle,.plan-intro p,.interior-copy p,#interior-count,
   .wall-card p,.process-description,.process-kicker,#build-count,.form-head p{font-size:14px}
 }
-/* Keep the scroll timeline on svh. Both scenes share the visible height;
-   the photo and video absorb changes in the available Safari height. */
-@media (max-width:600px) and (orientation:portrait){
-  .viewport:has(.construction.live,.enquiry.live){
-    overflow:visible;
-    clip-path:inset(0 0 calc(var(--view) - 100dvh) 0);
+/* Let Safari resize the visible stage without retiming the scroll chapters. */
+@media (pointer:coarse){
+  :root{--stage-view:100dvh}
+  .viewport{background-color:var(--paper)}
+  .browser-bottom-edge{
+    position:fixed;pointer-events:none;inset:auto 0 -6px;height:12px;
+    background-color:var(--paper);
   }
+  footer{z-index:1}
+  .footer-theme .browser-bottom-edge,body:has(#menu[open]) .browser-bottom-edge{background-color:var(--ink)}
+}
+@media (max-width:1024px) and (orientation:portrait) and (pointer:coarse){
+  #menu[open]{height:100dvh;max-height:100dvh}
+}
+@media (max-width:600px) and (orientation:portrait){
   :is(.construction,.enquiry){
     --build-vgap:var(--build-gap);
-    height:100dvh;
+    height:100%;
     bottom:auto;
   }
   .construction{--build-y:min(var(--build-u), 100dvh / 600)}

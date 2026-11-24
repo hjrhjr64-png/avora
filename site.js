@@ -48,7 +48,7 @@ const facadePoster = compactMedia ? 'assets/scrub/facade-mobile.webp' : 'assets/
 const facadeFolder = models + 'facade-poses';
 const wallFolder = models + 'wall-detail';
 let loadingMedia = true;
-let panoramaCover, panoramaWidth;
+let panoramaCover, panoramaWidth, visibleStageHeight;
 const packagedMedia = window.avoraPackagedMedia;
 
 async function cachedMedia(path) {
@@ -556,7 +556,10 @@ function header(t, y) {
     img.style.height = openingHeight + 'px';
     left += fullWidths[i] + gap;
   });
-  if (atFooter || (adapted && onDark) || mastDirection < 0) {
+  if (adapted && enteringFooter && !onDark) {
+    mastScrollEdge = y;
+    mast.classList.add('away');
+  } else if (atFooter || (adapted && onDark) || mastDirection < 0) {
     mastScrollEdge = y;
     mast.classList.remove('away');
   } else if (enteringFooter || t < 2) {
@@ -601,15 +604,15 @@ function heroAndVillage(t, openingHeaderBottom) {
       : step(t, 0, frontMatch, x => x * (.25 + x * (2.15 - 1.4 * x)));
     const openingWidth = portrait ? width * (mobile ? 1.17 : 1.12) : width;
     // The reference shows 496px of the facade below the roof in a 1920×1080 frame.
-    const roofY = portrait ? height * (mobile ? 1.01 : 1) - openingWidth * 496 / 1920
-                           : Math.max(height * 584 / 1080, height - openingWidth * 496 / 1920);
+    const roofY = portrait ? visibleStageHeight * (mobile ? 1.01 : 1) - openingWidth * 496 / 1920
+                           : Math.max(visibleStageHeight * 584 / 1080, visibleStageHeight - openingWidth * 496 / 1920);
     const openingScale = adaptiveLayout.matches ? (mobile ? 755 / 390 : 1505 / 768) * width / 1920 : (openingWidth / 1920) * (1688 / 960);
     const fullScale = fullWidth / 1920;
     const scale = openingScale + (fullScale - openingScale) * progress;
     const roofOffset = adaptiveLayout.matches
-      ? mobile ? 1.03 * height - 258.32 * width / 390 : height - 442 * width / 768
+      ? mobile ? 1.03 * visibleStageHeight - 258.32 * width / 390 : visibleStageHeight - 442 * width / 768
       : roofY - 276 * openingScale;
-    const fullTop = (height - fullWidth * 9 / 16) / 2;
+    const fullTop = (visibleStageHeight - fullWidth * 9 / 16) / 2;
     const y = roofOffset + (fullTop - roofOffset) * progress;
     const imageTransform = 'translate3d(' + (width - 1920 * scale) / 2 + 'px,' + y + 'px,0) scale(' + scale + ')';
     pullback.style.transform = heroGround.style.transform = imageTransform;
@@ -620,7 +623,7 @@ function heroAndVillage(t, openingHeaderBottom) {
     const roof = y + 274 * scale;
     const openingRoof = roofOffset + 274 * openingScale;
     const copyCenter = adaptiveLayout.matches
-      ? mobile ? height * .445 + 8.92 * width / 390 : height / 2 - 64 * width / 768
+      ? mobile ? visibleStageHeight * .445 + 8.92 * width / 390 : visibleStageHeight / 2 - 64 * width / 768
       : Math.min((openingHeaderBottom + roofY) / 2,
       openingRoof - (heroCopyHeight || intro.offsetHeight) / 2 - Math.max(18, width * .018));
     const descent = motion.matches ? 0 : step(t, 0, .5) * clamp(width * .036, 28, 78);
@@ -640,7 +643,7 @@ function heroAndVillage(t, openingHeaderBottom) {
     // Dissolve on the matched front view before the camera starts turning.
     const dissolve = motion.matches ? step(t, panoramaStart, 2.05) : step(t, frontMatch - .065, frontMatch);
     scenes.panorama.style.opacity = dissolve * veil;
-    scenes.panorama.style.transform = 'translate3d(0,' + -height * leave + 'px,0)';
+    scenes.panorama.style.transform = 'translate3d(0,' + -visibleStageHeight * leave + 'px,0)';
     const flight = motion.matches ? step(t, 2.02, 3.74)
       : step(t, frontMatch, 3.74, x => x * (.4 + x * (2.2 - 1.6 * x)));
     village.set(villageFolder, 1 + 120 * flight, 121);
@@ -1282,12 +1285,20 @@ function render() {
   }
 }
 function schedule() { if (!raf) raf = requestAnimationFrame(render); }
+function measurePanorama() {
+  visibleStageHeight = viewport.clientHeight;
+  panoramaCover = Math.max(width, visibleStageHeight * 16 / 9);
+  panoramaWidth = portrait ? width * (width <= 600 ? 1.64 : 1.38) : Math.min(panoramaCover, width * 1.4);
+  villageCanvas.style.cssText = panoramaWidth < panoramaCover
+    ? 'left:50%;top:50%;width:' + panoramaCover + 'px;height:' + panoramaCover * 9 / 16 + 'px' : '';
+}
 function measure() {
-  const resized = unit && (width !== viewport.clientWidth || height !== viewport.clientHeight);
+  const timelineHeight = parseFloat(getComputedStyle(viewport).minHeight);
+  const resized = unit && (width !== viewport.clientWidth || height !== timelineHeight);
   if (resized) finishCardLines();
   const previousTime = resized ? timeAt(window.scrollY) : null;
   width = viewport.clientWidth;
-  height = viewport.clientHeight;
+  height = timelineHeight;
   portrait = adaptiveLayout.matches || matchMedia('(max-aspect-ratio:4/5)').matches;
   planTrack.hidden = false;
   planTrackWidth = 0;
@@ -1318,10 +1329,7 @@ function measure() {
   // The scenes can be display:none here. Use the house's fitted 3:2 width
   // and the wall's resolved viewport-based CSS width, including overscan.
   const houseWidth = modelDisplayWidth() * 27 / 32;
-  panoramaCover = Math.max(width, height * 16 / 9);
-  panoramaWidth = portrait ? width * (width <= 600 ? 1.64 : 1.38) : Math.min(panoramaCover, width * 1.4);
-  villageCanvas.style.cssText = panoramaWidth < panoramaCover
-    ? 'left:50%;top:50%;width:' + panoramaCover + 'px;height:' + panoramaCover * 9 / 16 + 'px' : '';
+  measurePanorama();
   village.setRasterWidth(Math.min(3840, Math.round(panoramaCover * devicePixelRatio)));
   const wallWidth = parseFloat(getComputedStyle(wall.canvas).width);
   house.setRasterWidth(Math.min(3840, Math.round(houseWidth * devicePixelRatio)));
@@ -1378,7 +1386,7 @@ function measure() {
   const widePitch = height + .8 * planHeight;
   planUnit = usesPlanRail() ? unit * .82 : unit + widePlanSpacing * (widePitch / cardPitch - unit);
   buildEntryStretch = .75;
-  story.style.height = (height + scrollAt(END)) + 'px';
+  story.style.height = 'calc(' + scrollAt(END) + 'px + var(--stage-view,var(--view)))';
   for (const [id, time] of chapters) document.getElementById(id).style.top = Math.round(scrollAt(time)) + 'px';
   if (previousTime !== null && previousTime <= END) {
     window.scrollTo({top:scrollAt(previousTime), behavior:'instant'});
@@ -1584,18 +1592,18 @@ function acceptsPageGesture(event) {
   return !event.defaultPrevented && !document.querySelector('dialog[open]') &&
     !event.target.closest?.('input,textarea,select,[contenteditable="true"]');
 }
-let wheelGesture = null, finger = null;
+let wheelGesture = null, finger = null, nativeTouchRange = null;
 const wheelStepThreshold = 16;
 const wheelQuietTime = 180;
 const fineWheelPause = 350;
 function resetGestures() {
-  wheelGesture = finger = null;
+  wheelGesture = finger = nativeTouchRange = null;
   interruptScroll();
 }
 window.addEventListener('pointerdown', event => {
   if (event.pointerType !== 'touch') resetGestures();
 }, {passive:true});
-for (const type of ['resize', 'popstate']) window.addEventListener(type, resetGestures);
+window.addEventListener('popstate', resetGestures);
 motion.addEventListener('change', resetGestures);
 
 function readingOrigin(y, direction) {
@@ -1627,7 +1635,7 @@ function startsAnotherWheelStep(gesture, gap, magnitude, now) {
 window.addEventListener('wheel', event => {
   if (!acceptsPageGesture(event) || !event.cancelable || event.ctrlKey || event.metaKey ||
       event.shiftKey || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-  finger = null;
+  finger = nativeTouchRange = null;
   const mode = event.deltaMode;
   const delta = event.deltaY * (mode === 1 ? 16 : mode === 2 ? height : 1);
   const direction = Math.sign(delta), magnitude = Math.abs(delta), now = event.timeStamp;
@@ -1666,48 +1674,57 @@ window.addEventListener('wheel', event => {
   finishReadingInput(stop, origin, direction * gesture.distance);
 }, {passive:false});
 
+// A free swipe belongs to the browser, including its momentum after release.
+// Bound that fling only at the entrance to the next authored reading group.
+function nativeRangeAt(y) {
+  const previous = nextReadingStop(y, -Infinity), next = nextReadingStop(y, Infinity);
+  return {
+    min:previous ? Math.round(scrollAt(previous.time)) : -Infinity,
+    max:next ? Math.round(scrollAt(next.time)) : Infinity
+  };
+}
+window.addEventListener('scroll', () => {
+  if (!nativeTouchRange) return;
+  const y = window.scrollY;
+  const bounded = clamp(y, nativeTouchRange.min, nativeTouchRange.max);
+  if (bounded !== y) window.scrollTo({top:bounded, behavior:'instant'});
+}, {passive:true});
 window.addEventListener('touchstart', event => {
-  wheelGesture = finger = null;
+  wheelGesture = finger = nativeTouchRange = null;
   if (!acceptsPageGesture(event) || event.touches.length !== 1) return;
   const touch = event.touches[0];
-  finger = {x:touch.clientX, y:touch.clientY, previousY:touch.clientY, axis:null, handled:false};
+  finger = {x:touch.clientX, y:touch.clientY, handled:false};
+  if (!selectedSlide) nativeTouchRange = nativeRangeAt(window.scrollY);
 }, {passive:true});
 window.addEventListener('touchmove', event => {
   if (!finger || event.touches.length !== 1 || !event.cancelable) return;
   const touch = event.touches[0], distance = finger.y - touch.clientY;
-  if (!finger.axis) {
-    if (!distance && touch.clientX === finger.x) return;
-    finger.axis = Math.abs(distance) > Math.abs(touch.clientX - finger.x) ? 'vertical' : 'horizontal';
-  }
-  if (finger.axis !== 'vertical') return;
-
-  // Drive the vertical timeline from this contact. A compositor fling has no
-  // remaining distance that can run into the following scene or swipe.
-  event.preventDefault();
-  if (finger.handled) return;
-  const delta = finger.previousY - touch.clientY;
-  if (!delta) return;
+  if (!distance || Math.abs(distance) < Math.abs(touch.clientX - finger.x)) return;
+  if (finger.handled) { event.preventDefault(); return; }
   const y = window.scrollY;
-  const origin = readingOrigin(y, Math.sign(delta));
-  const stop = nextReadingStop(origin, delta);
-  if (stop || origin !== y) {
-    if (!stop?.entry && Math.abs(distance) < 24) return;
-    finger.handled = true;
-    finishReadingInput(stop, origin, delta);
+  const origin = readingOrigin(y, Math.sign(distance));
+  const stop = nextReadingStop(origin, distance);
+  if ((!stop || stop.entry) && origin === y) {
+    interruptScroll();
+    nativeTouchRange ??= nativeRangeAt(y);
+    finger = null;
     return;
   }
-  interruptScroll();
-  finger.previousY = touch.clientY;
-  window.scrollBy({top:delta,behavior:'instant'});
+  nativeTouchRange = null;
+  event.preventDefault();
+  if (Math.abs(distance) < 24) return;
+  finger.handled = true;
+  finishReadingInput(stop, origin, distance);
 }, {passive:false});
 for (const type of ['touchend', 'touchcancel']) {
   window.addEventListener(type, () => { finger = null; }, {passive:true});
 }
 window.addEventListener('keydown', event => {
+  nativeTouchRange = null;
   if (!acceptsPageGesture(event) || event.altKey || event.ctrlKey || event.metaKey ||
       event.target.closest?.('button,a,[role="slider"]')) return;
   const direction = {ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1,' ':event.shiftKey ? -1 : 1}[event.key];
-  wheelGesture = finger = null;
+  wheelGesture = finger = nativeTouchRange = null;
   if (!direction) { interruptScroll(); return; }
   const stride = event.key.startsWith('Arrow') ? 40 : height * .9;
   const y = window.scrollY;
@@ -1885,7 +1902,7 @@ contactForm.addEventListener('submit', event => {
   }
   const [name, phone, message] = enquiryFields.map(field => field.value.trim());
   const body = 'Name: ' + name + '\nPhone: ' + phone + '\n\n' + message;
-  enquiryDraft.href = 'mailto:hello@avora.studio?subject=AVORA%20project%20enquiry&body=' + encodeURIComponent(body);
+  enquiryDraft.href = 'mailto:artem@unfa-design.ru?subject=AVORA%20project%20enquiry&body=' + encodeURIComponent(body);
   enquiryInputs.inert = true;
   enquiryConfirmation.hidden = false;
   enquiryIntro.hidden = true;
@@ -1895,7 +1912,15 @@ contactForm.addEventListener('submit', event => {
   enquiryDraft.click();
 });
 window.addEventListener('scroll', schedule, {passive:true});
-window.addEventListener('resize', measure);
+window.addEventListener('resize', () => {
+  if (width !== viewport.clientWidth || height !== parseFloat(getComputedStyle(viewport).minHeight)) {
+    resetGestures();
+    measure();
+  } else if (visibleStageHeight !== viewport.clientHeight) {
+    measurePanorama();
+    schedule();
+  }
+});
 adaptiveLayout.addEventListener('change', measure);
 landscapePlans.addEventListener('change', measure);
 document.addEventListener('visibilitychange', schedule);
