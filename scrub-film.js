@@ -260,7 +260,7 @@ class ScrubFilm {
         catch { /* Keep range and still-image playback available after an interrupted download. */ }
       }
     }
-    if (!online || (preload?.blocking && !preload.deferStills)) await this.warmStills();
+    if (!online || preload?.blocking) await this.warmStills();
     try {
       const description = Uint8Array.from(m.avcc.match(/../g), (v) => parseInt(v, 16));
       const config = {
@@ -277,9 +277,13 @@ class ScrubFilm {
         if (online) this.blob = null;
       }
       this.config = config;
-      if (online && preload && !preload.blocking) this.preloadMovie(preload).then(schedule, schedule);
+      if (online && preload && !preload.blocking) this.preloadMovie(preload).catch(() => {}).finally(() => {
+        this.downloadFinished = true;
+        schedule();
+      });
     } catch {
       try {
+        if (preload?.streamOnApproach) await this.preloadMovie(preload).catch(() => {});
         await this.nativeVideo();
       } catch {
         this.failed = true;

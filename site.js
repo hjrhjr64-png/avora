@@ -2107,8 +2107,8 @@ function prepareOnlineMedia(t) {
     if (openingVillage && !openingVillage.loading) openingVillage.loadOnline({blocking:true});
     const openingReady = !openingVillage || openingVillage.meta || openingVillage.failed;
     if (openingReady && touchViewport.matches && !house.loading)
-      house.loadOnline({blocking:true, deferStills:true});
-    if (!village.loading && openingReady && (!touchViewport.matches || house.meta || house.failed))
+      house.loadOnline({streamOnApproach:true});
+    if (!village.loading && openingReady && (!touchViewport.matches || house.bytes || house.video || house.failed || house.downloadFinished))
       village.loadOnline({blocking:true});
   }
   if (t > .18 && t < 6.2 && !scenes.panorama.style.getPropertyValue('--panorama-poster')) {
@@ -2116,7 +2116,7 @@ function prepareOnlineMedia(t) {
     scenes.panorama.style.setProperty('--panorama-poster', `url("${sequenceAsset(villageFolder, 1, 'jpg')}")`);
   }
   if (!house.loading && t > (touchViewport.matches ? .18 : 3.2) && t < 18.15)
-    house.loadOnline({blocking:touchViewport.matches, deferStills:true});
+    house.loadOnline({streamOnApproach:touchViewport.matches});
   if (!house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
   if (t > 10.8 && t < 19.05) {
     if (adaptiveLayout.matches && !facadePreview.src) {
