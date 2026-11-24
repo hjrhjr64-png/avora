@@ -260,7 +260,7 @@ class ScrubFilm {
         catch { /* Keep range and still-image playback available after an interrupted download. */ }
       }
     }
-    if (!online || preload?.blocking) await this.warmStills();
+    if (!online || (preload?.blocking && !preload.deferStills)) await this.warmStills();
     try {
       const description = Uint8Array.from(m.avcc.match(/../g), (v) => parseInt(v, 16));
       const config = {
@@ -520,7 +520,7 @@ class ScrubFilm {
       const {image, companion} = shown.frame;
       if (this.draw) this.draw(this.context, image, companion);
       else this.paint(image, shown.folder, shown.position - 1 + this.offset(shown.folder), true);
-      this.shown = shown;
+      this.shown = {...shown, index:shown.position - 1 + this.offset(shown.folder)};
     }
     return this.shown?.folder === folder;
   }

@@ -802,7 +802,7 @@ dialog::backdrop{background:#17191866}
   .compact-wordmark{left:50%;top:50%;transform:translate(-50%,-50%)}
   .menu-wordmark{top:50%;transform:translate(-50%,-50%)}
   .menu-top button,#menu-button{width:44px;min-height:44px;text-align:left}
-  .menu-top button{justify-items:start}
+  .menu-top button{justify-items:center;margin-inline-start:-10px}
 }
 
 @media (max-width:600px) and (orientation:portrait){
@@ -827,8 +827,12 @@ dialog::backdrop{background:#17191866}
     position:fixed;pointer-events:none;inset:auto 0 -6px;height:12px;
     background-color:var(--paper);
   }
+  body:has(.panorama.live) .browser-bottom-edge{visibility:hidden}
   footer{z-index:1}
   .footer-theme .browser-bottom-edge,body:has(#menu[open]) .browser-bottom-edge{background-color:var(--ink)}
+}
+@media (orientation:landscape) and (pointer:coarse){
+  .viewport:has(.panorama.live){height:max(var(--stage-view),100dvh)}
 }
 @media (max-width:1024px) and (orientation:portrait) and (pointer:coarse){
   #menu[open]{height:100dvh;max-height:100dvh}

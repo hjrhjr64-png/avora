@@ -368,8 +368,10 @@ function interleavedAsset(folder, index, samples = 2, extension = 'webp') {
   if (offset * 2 === samples) return sequenceAsset(intermediate, base, extension);
   return intermediate + '/' + String(base).padStart(4, '0') + '-q' + offset + '.' + extension;
 }
+const tabletHouse = !packagedMedia && touchViewport.matches && !compactMedia &&
+  Math.min(screen.width, screen.height) <= 1024;
 const panoramaPixels = Math.max(innerWidth, innerHeight * 16 / 9) * devicePixelRatio;
-const landscapePanorama = !packagedMedia && !compactMedia && panoramaPixels <= 1920
+const landscapePanorama = !packagedMedia && !compactMedia && (tabletHouse || panoramaPixels <= 1920)
   ? scrubPath('village', '1080') : scrubPath('village');
 const villagePath = compactMedia && adaptiveLayout.matches ? 'assets/film/panorama-phone'
   : adaptiveLayout.matches ? 'assets/film/panorama' : landscapePanorama;
@@ -378,6 +380,25 @@ const villageFolder = adaptiveLayout.matches ? 'assets/film/panorama-frames' : '
 const onlineVillage = villagePath === scrubPath('village', 'mobile') ? villagePath : villagePath + '-web';
 const village = new ScrubFilm(villageCanvas,{path:packagedMedia ? villagePath : onlineVillage,
   fallback:{asset:(folder,index) => sequenceAsset(folder,index,'jpg')}});
+// The short startup download contains every camera pose. Upgrade only when
+// the full-resolution decoder can paint the exact pose already on screen.
+let openingVillage = packagedMedia ? null : new ScrubFilm(villageCanvas,{
+  path:scrubPath('pano','first'), fallback:village.fallback
+});
+function showVillage(pose, paint = true) {
+  if (openingVillage && village.meta && !village.failed) {
+    village.set(villageFolder, pose, 121, false);
+    const i = village.wanted.index;
+    if (paint && (village.frames.has(i) || (village.video?.readyState >= 2 &&
+        village.seekingIndex == null && village.nativeIndex === i))) {
+      openingVillage.release();
+      if (openingVillage.video?.src.startsWith('blob:')) URL.revokeObjectURL(openingVillage.video.src);
+      openingVillage = null;
+      village.shown = null;
+    }
+  }
+  (openingVillage ?? village).set(villageFolder, pose, 121, paint);
+}
 const orbitFolder = models + 'orbit';
 const morphFolder = models + 'morph';
 const masterPaths = {};
@@ -385,19 +406,13 @@ if (!compactMedia) {
   for (const [i, n] of [[150,1],[330,91],[510,181]])
     masterPaths[i] = sequenceAsset(morphFolder + '-hd-detail',n);
 }
-const tabletHouse = !packagedMedia && touchViewport.matches && !compactMedia &&
-  Math.min(screen.width, screen.height) <= 1024;
 const houseCanvas = $('#house-sequence');
-const house = tabletHouse ? new FrameSequence(houseCanvas, schedule, {
-  source:mediaSource,
-  asset:(folder,index) => folder === orbitFolder ? sequenceAsset(orbitFolder,index)
-    : masterPaths[index + 149] ?? interleavedAsset(morphFolder,index)
-}) : new ScrubFilm(houseCanvas,{
-  path:scrubPath('house',detailProfile), matte:'below',
+const house = new ScrubFilm(houseCanvas,{
+  path:scrubPath('house',tabletHouse ? 'tablet' : detailProfile), matte:'below',
   offset:folder => folder === morphFolder ? 150 : 0, stillPaths:masterPaths,
   fallback:{asset:(folder,index) => {
-    if (folder === orbitFolder) return sequenceAsset(compactMedia ? folder : folder+'-detail',index);
-    return masterPaths[index+149] ?? interleavedAsset(compactMedia ? folder : folder+'-detail',index);
+    if (folder === orbitFolder) return sequenceAsset(compactMedia || tabletHouse ? folder : folder+'-detail',index);
+    return masterPaths[index+149] ?? interleavedAsset(compactMedia || tabletHouse ? folder : folder+'-detail',index);
   }}
 });
 const field = $('.facade-field');
@@ -641,7 +656,7 @@ function portraitRoofOffset() {
 function houseTransform(scale, y) {
   return 'translate3d(' + (width - 1920 * scale) / 2 + 'px,' + y + 'px,0) scale(' + scale + ')';
 }
-let openingHouseAnimation;
+let openingHouseAnimation, modelArrivalAnimation;
 const phoneCopyCenter = () => height * .445 + 8.92 * width / 390;
 const copyTravel = () => clamp(width * .036, 28, 78);
 const copyTransform = center => 'translate3d(-50%,calc(' + center + 'px - 50%),0)';
@@ -651,9 +666,17 @@ function measureOpeningMotion() {
   openingCopyAnimations = [];
   openingHouseAnimation?.cancel();
   openingHouseAnimation = null;
-  if (!adaptiveLayout.matches || !touchViewport.matches || motion.matches ||
+  modelArrivalAnimation?.cancel();
+  modelArrivalAnimation = null;
+  if (!touchViewport.matches || motion.matches ||
       !window.ScrollTimeline || !CSS.supports('animation-range', '0px 300px')) return;
   const timeline = new ScrollTimeline({source:document.scrollingElement});
+  const arrivalFrames = Array.from({length:33}, (_, i) => ({
+    translate:'0 ' + (1 - revealEase(i / 32)) * height * .7 + 'px'
+  }));
+  modelArrivalAnimation = modelFrame.animate(arrivalFrames, {timeline, fill:'both',
+    rangeStart:scrollAt(5.12) + 'px', rangeEnd:scrollAt(6.03) + 'px'});
+  if (!adaptiveLayout.matches) return;
   openingHouseAnimation = pullback.animate([
     {transform:houseTransform(portraitOpeningScale(), portraitRoofOffset())},
     {transform:houseTransform(panoramaWidth / 1920, (height - panoramaWidth * 9 / 16) / 2)}
@@ -671,8 +694,8 @@ function measureOpeningMotion() {
 function heroAndVillage(t, openingHeaderBottom) {
   const panoramaStart = 1.7, frontMatch = 1.82, exitStart = 3.82, exitEnd = exitStart + overlapSpan;
   if (t >= 2.1) scenes.hero.classList.remove('first-visit');
-  if (t > .25 && t < panoramaStart) village.set(villageFolder, 1, 121, false);
-  if (t >= exitEnd && t < 5.12) village.set(villageFolder,121,121,false);
+  if (t > .25 && t < panoramaStart) showVillage(1,false);
+  if (t >= exitEnd && t < 5.12) showVillage(121,false);
   const mobile = width <= 600;
   const fullWidth = panoramaWidth;
   // The toolbar changes the visible height mid-swipe. Keep the opening
@@ -730,7 +753,7 @@ function heroAndVillage(t, openingHeaderBottom) {
     scenes.panorama.style.transform = 'translate3d(0,' + -visibleStageHeight * leave + 'px,0)';
     const flight = motion.matches ? step(t, 2.02, 3.74)
       : step(t, frontMatch, 3.74, x => x * (.4 + x * (2.2 - 1.6 * x)));
-    village.set(villageFolder, 1 + 120 * flight, 121);
+    showVillage(1 + 120 * flight);
   }
   title('shape-title', t, exitStart + .55 * overlapSpan, exitEnd, 5.22, 5.86);
 }
@@ -866,15 +889,14 @@ function houseAndPlans(t) {
   const active = visible('geometry', t >= 5.12 && t < interiorArrival);
   if (t > (tabletHouse ? 3.2 : 4.4) && t < 5.12) {
     // Only the entrance pose is needed while the panorama is still on screen.
-    if (tabletHouse) house.set(orbitFolder, 1, 1, false);
-    else house.set(orbitFolder, 1, 150);
+    house.set(orbitFolder, 1, 150);
   }
   if (!active) {
     plansOpen = false;
     return;
   }
   const arrival = reveal(t, 5.12, 6.03);
-  modelFrame.style.translate = arrival < 1 ? '0 ' + (1 - arrival) * height * .7 + 'px' : '';
+  if (!modelArrivalAnimation) modelFrame.style.translate = arrival < 1 ? '0 ' + (1 - arrival) * height * .7 + 'px' : '';
   if (usesPlanRail()) renderPlanRail(t);
   else planCards.forEach((card, i) => {
     const center = firstPlan + i * cardPitch;
@@ -1373,6 +1395,7 @@ function render() {
   wallSystem(current);
   construction(current);
   frameSequences.forEach(sequence => sequence.endRender());
+  openingVillage?.endRender();
   if (focusOnArrival && Math.abs(focusOnArrival.getBoundingClientRect().top) <= 2) {
     const target = focusOnArrival;
     focusOnArrival = null;
@@ -1439,6 +1462,7 @@ function measure() {
   // and the wall's resolved viewport-based CSS width, including overscan.
   const houseWidth = modelDisplayWidth() * 27 / 32;
   measurePanorama();
+  openingVillage?.setRasterWidth(960);
   village.setRasterWidth(Math.min(3840, Math.round(panoramaCover * devicePixelRatio)));
   const wallWidth = parseFloat(getComputedStyle(wall.canvas).width);
   house.setRasterWidth(Math.min(3840, Math.round(houseWidth * devicePixelRatio)));
@@ -2079,13 +2103,21 @@ if (location.hash && document.getElementById(location.hash.slice(1))) document.g
 render();
 
 function prepareOnlineMedia(t) {
-  if (t < 6.2 && !village.loading) village.loadOnline();
+  if (t < 6.2) {
+    if (openingVillage && !openingVillage.loading) openingVillage.loadOnline({blocking:true});
+    const openingReady = !openingVillage || openingVillage.meta || openingVillage.failed;
+    if (openingReady && touchViewport.matches && !house.loading)
+      house.loadOnline({blocking:true, deferStills:true});
+    if (!village.loading && openingReady && (!touchViewport.matches || house.meta || house.failed))
+      village.loadOnline({blocking:true});
+  }
   if (t > .18 && t < 6.2 && !scenes.panorama.style.getPropertyValue('--panorama-poster')) {
     loadImage($('.village-still img'));
     scenes.panorama.style.setProperty('--panorama-poster', `url("${sequenceAsset(villageFolder, 1, 'jpg')}")`);
   }
-  if (!tabletHouse && !house.loading && t > 3.2 && t < 18.15) house.loadOnline();
-  if (!tabletHouse && !house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
+  if (!house.loading && t > (touchViewport.matches ? .18 : 3.2) && t < 18.15)
+    house.loadOnline({blocking:touchViewport.matches, deferStills:true});
+  if (!house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
   if (t > 10.8 && t < 19.05) {
     if (adaptiveLayout.matches && !facadePreview.src) {
       facadePreview.onload = schedule;
@@ -2138,7 +2170,7 @@ async function warmOpening(onProgress, signal) {
   images.forEach(loadImage);
   if (t >= filmArrival) forestFilm.poster = contactPoster;
   const work = Promise.allSettled([...images.map(image => image.decode()), ...openingFonts()]);
-  const film = t < 4.25 ? village : t < 13.86 ? (tabletHouse ? null : house) : t < 16.85 ? facadePose
+  const film = t < 4.25 ? openingVillage : t < 13.86 ? house : t < 16.85 ? facadePose
     : t >= wallStart && t < wallEnd ? wall : null;
   // The opening film must already be local when the first scroll arrives.
   // Farther scenes fetch on approach and do not compete for startup bandwidth.
@@ -2149,7 +2181,7 @@ async function warmOpening(onProgress, signal) {
     film?.loadOnline({blocking:true, signal, progress:fraction => { filmProgress = fraction; update(); }})
       .finally(() => { filmProgress = 1; update(); })
   ]);
-  if (film === village && !signal.aborted && village.bytes && village.config) village.decodeGroup(0);
+  if (film && !signal.aborted && film.bytes && film.config) film.decodeGroup(0);
 }
 
 async function warmMedia(onProgress, signal) {
