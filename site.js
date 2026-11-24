@@ -394,6 +394,7 @@ const house = new ScrubFilm($('#house-sequence'),{
 });
 const field = $('.facade-field');
 const facadeCanvas = $('.facade-turn');
+const facadePreview = new Image();
 let facadeLayout, maskClipPosition;
 const facadePose = new ScrubFilm(facadeCanvas,{path:scrubPath('facades',detailProfile),draw:drawFacade,
   fallback:{asset:(folder,index) => interleavedAsset(folder,index,facadeSamples),
@@ -912,9 +913,18 @@ function facade(t) {
       centerY + row * startY * (1 - pull) + y * u * pull];
   }) : null;
   facadeLayout = {centerY, pitchX, pitchY, scale, centers};
-  if (pose === 1) facadePose.shown = null;
-  const ready = facadePose.set(folder, pose, lastPose, pose > 1);
-  const rotating = pose > 1 && ready;
+  // The CSS tiles may still be loading after a direct or reverse entry.
+  // The movie's first frame contains that same grid at the pullback scale.
+  const posterReady = packagedMedia || (facadePreview.complete && facadePreview.naturalWidth > 0);
+  const useAtlas = pose > 1 || (adapted && (pull === 1 || !posterReady));
+  if (pose === 1 && (!useAtlas || pull < 1)) facadePose.shown = null;
+  const ready = facadePose.set(folder, pose, lastPose, useAtlas);
+  const havePose = ready && (pose > 1 || facadePose.shown?.position === 1);
+  const keepAtlas = adapted && !posterReady && !facadeCanvas.hidden;
+  const rotating = useAtlas && (havePose || keepAtlas);
+  const posterCenter = adapted && !rotating && posterReady &&
+    !(house.shown?.folder === morphFolder && house.shown.position === sampleFrame(181));
+  facadeTiles[4].hidden = !posterCenter;
   if (adapted) modelFrame.style.width = portraitModelWidth() + 'px';
   if (!rotating) {
     modelFrame.style.top = centerY + 'px';
@@ -929,7 +939,7 @@ function facade(t) {
     field.hidden = rotating;
     facadeCanvas.hidden = !rotating;
   }
-  modelFrame.style.visibility = rotating ? 'hidden' : '';
+  modelFrame.style.visibility = rotating || posterCenter ? 'hidden' : '';
   const middle = adapted ? 16.08 : 16.60;
   const windowScale = adapted ? u : Math.min(width / 1920, height / 1080);
   const windowW = (adapted ? (phone ? 295 : 561) : 775) * windowScale;
@@ -2028,9 +2038,15 @@ function prepareOnlineMedia(t) {
   }
   if (!house.loading && t > 3.2 && t < 18.15) house.loadOnline();
   if (!house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
-  if (t > 10.8 && t < 19.05 && !field.style.getPropertyValue('--facade-atlas')) {
-    field.style.setProperty('--facade-atlas', `url("${facadePoster}")`);
-    facadePose.loadOnline();
+  if (t > 10.8 && t < 19.05) {
+    if (adaptiveLayout.matches && !facadePreview.src) {
+      facadePreview.onload = schedule;
+      facadePreview.src = facadePoster;
+    }
+    if (!field.style.getPropertyValue('--facade-atlas')) {
+      field.style.setProperty('--facade-atlas', `url("${facadePoster}")`);
+      facadePose.loadOnline();
+    }
   }
   if (!wall.loading && t > 20.2 && t < 31.5) wall.loadOnline();
 }
