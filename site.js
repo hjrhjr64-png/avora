@@ -506,6 +506,11 @@ function loopVideo(video, play) {
     }
   } else if (!video.paused) video.pause();
 }
+const footer = $('#footer');
+const themeColor = $('meta[name="theme-color"]');
+const pageTheme = themeColor?.content;
+const footerTheme = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+let footerThemeActive = false;
 let mastScrollEdge = 0, mastPreviousY = 0, mastDirection = 0;
 function header(t, y) {
   const assemblyDistance = clamp(height * .42, 220, 440);
@@ -515,7 +520,14 @@ function header(t, y) {
   mastPreviousY = y;
   const enteringFooter = t >= END - .002;
   const atFooter = enteringFooter && y >= document.documentElement.scrollHeight - innerHeight - .5;
-  const onDark = enteringFooter && $('#footer').getBoundingClientRect().top <= barHeight / 2;
+  const footerTop = enteringFooter ? footer.getBoundingClientRect().top : Infinity;
+  const onDark = footerTop <= barHeight / 2;
+  const footerInView = footerTop < innerHeight - 1;
+  if (footerThemeActive !== footerInView) {
+    footerThemeActive = footerInView;
+    document.documentElement.classList.toggle('footer-theme', footerInView);
+    if (themeColor) themeColor.content = footerInView ? footerTheme : pageTheme;
+  }
   mast.classList.toggle('on-dark', onDark);
   mast.classList.toggle('at-footer', atFooter);
   const bar = barHeight;

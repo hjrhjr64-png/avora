@@ -23,6 +23,7 @@
   ::view-transition-new(root){animation-duration:1ms}
 }
 html,body{margin:0;color:var(--ink);background:var(--paper);font:500 16px/1.2 Archivo,Arial,sans-serif}
+html.footer-theme,html.footer-theme body{background-color:var(--ink)}
 body:has(dialog[open]){overflow:hidden}
 #preloader{
   position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;
@@ -66,7 +67,7 @@ h1,h2,.email,.menu-title{font-size:var(--display);letter-spacing:-.04em;line-hei
 @keyframes rules{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes appear{from{opacity:0}to{opacity:1}}
 @keyframes rise{from{transform:translateY(62%)}to{transform:none}}
-.story{position:relative;height:calc(var(--view)*34)}
+.story{position:relative;height:calc(var(--view)*34);background:var(--paper)}
 .viewport{position:sticky;top:0;width:100%;height:var(--view);overflow:hidden;isolation:isolate}
 .anchor{position:absolute;left:0;width:1px;height:1px;pointer-events:none}
 .scene{position:absolute;inset:0;overflow:hidden;visibility:hidden;pointer-events:none}
@@ -508,8 +509,9 @@ dialog::backdrop{background:#17191866}
   .process-description{font-size:calc(16 * var(--build-u))}
   .build-controls{gap:calc(20 * var(--build-y))}
   .build-rail::before{--thumb:28.84%;width:var(--thumb);left:calc(var(--build-progress,0) * (100% - var(--thumb)))}
+  .enquiry{--form-height:calc(524 * var(--build-y))}
   #enquiry-form{
-    top:var(--build-vgap);bottom:auto;height:calc(524 * var(--build-y));
+    top:var(--build-vgap);bottom:auto;height:var(--form-height);
     --field-side:calc(24 * var(--build-u));--field-indent:calc(30 * var(--build-u));
     --control-h:calc(54 * var(--build-y));--textarea-h:calc(104 * var(--build-y));--submit-h:calc(62 * var(--build-y));
   }
@@ -522,9 +524,9 @@ dialog::backdrop{background:#17191866}
   .fields label[data-valid]:has(textarea)::after{top:calc(27 * var(--build-y))}
   .form-end{bottom:calc(24 * var(--build-y))}
   .form-end button{font-size:calc(18 * var(--build-u))}
-  .contact-film-window{
-    top:calc(544 * var(--build-y));height:calc(290 * var(--build-y));
-    transform:none;
+  .enquiry .contact-film-window{
+    top:calc(var(--form-height) + 2 * var(--build-vgap));
+    bottom:var(--build-vgap);height:auto;transform:none;
   }
   .contact-film{transform:translateX(calc(100% * var(--film-enter,1) - 16vw * sin(var(--film-sweep,0) * 180deg)))}
   footer{
@@ -726,10 +728,6 @@ dialog::backdrop{background:#17191866}
   .process-frame{bottom:calc(286 * var(--build-y))}
   #enquiry-form{width:var(--build-card)}
   .contact-film{transform:none}
-  .contact-film-window{
-    top:calc(544 * var(--build-y));
-    bottom:var(--build-vgap);height:auto;
-  }
   #menu[open]{--nav-size:20px;--num-size:12px;--social-size:16px;--social-gap:21px}
   #menu .desktop-word{display:none}
   .menu-wordmark{width:120px;top:16px}
@@ -814,19 +812,19 @@ dialog::backdrop{background:#17191866}
   .opening-copy .subtitle,.plan-intro p,.interior-copy p,#interior-count,
   .wall-card p,.process-description,.process-kicker,#build-count,.form-head p{font-size:14px}
 }
-/* Keep the scroll timeline on svh. The construction photo absorbs changes
-   in available Safari height while the card retains its artboard geometry. */
+/* Keep the scroll timeline on svh. Both scenes share the visible height;
+   the photo and video absorb changes in the available Safari height. */
 @media (max-width:600px) and (orientation:portrait){
-  .viewport:has(.construction.live){
+  .viewport:has(.construction.live,.enquiry.live){
     overflow:visible;
     clip-path:inset(0 0 calc(var(--view) - 100dvh) 0);
   }
-  .construction{
-    --build-y:min(var(--build-u), 100dvh / 600);
+  :is(.construction,.enquiry){
     --build-vgap:var(--build-gap);
     height:100dvh;
     bottom:auto;
   }
+  .construction{--build-y:min(var(--build-u), 100dvh / 600)}
   .construction .process-frame{bottom:calc(266 * var(--build-y) + 2 * var(--build-gap))}
   .construction .process-card{padding-block:calc(40 * var(--build-y))}
   .construction .process-kicker{font-size:calc(12 * var(--build-u))}
