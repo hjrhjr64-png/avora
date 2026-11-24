@@ -37,7 +37,7 @@ const models = 'assets/models/';
 const touchViewport = matchMedia('(pointer:coarse)');
 const compactMedia = matchMedia('(max-width:600px)').matches;
 const adaptiveLayout = matchMedia('(max-width:1024px) and (orientation:portrait)');
-const landscapePlans = matchMedia('(orientation:landscape) and (pointer:coarse) and (max-width:1366px) and (max-height:1024px)');
+const landscapePlans = matchMedia('(orientation:landscape) and (pointer:coarse) and (max-width:1023px) and (max-height:600px)');
 const isPortraitTablet = () => adaptiveLayout.matches && width > 600;
 const usesPlanRail = () => adaptiveLayout.matches || landscapePlans.matches;
 const mediaProfile = compactMedia ? 'mobile' : 'desktop';

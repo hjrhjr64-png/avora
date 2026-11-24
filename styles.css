@@ -687,6 +687,8 @@ dialog::backdrop{background:#17191866}
   .menu-bottom{position:static;display:grid;justify-content:center;justify-items:center;gap:var(--social-gap);
     margin-top:auto;padding:32px 10px min(5.86svh,60px);font-size:var(--social-size);line-height:1.2}
   .menu-bottom>div{display:contents}
+}
+@media (max-width:1024px) and (orientation:portrait), (orientation:landscape) and (pointer:coarse) and (max-width:1023px) and (max-height:600px){
   #plans-cards{
     --u:var(--plan-u);--card-width:calc(564 * var(--u));--start:calc(10 * var(--u));
     position:absolute;inset:auto 0 calc(20 * var(--u));display:flex;gap:calc(10 * var(--u));
@@ -750,7 +752,7 @@ dialog::backdrop{background:#17191866}
   .menu-bottom{padding-top:24px}
 }
 
-@media (orientation:landscape) and (pointer:coarse) and (max-width:1366px) and (max-height:1024px){
+@media (orientation:landscape) and (pointer:coarse) and (max-width:1023px) and (max-height:600px){
   #plans-cards{
     --plan-u:min(0.086vw,0.145svh);--start:calc((100% - var(--card-width)) / 2);
     inset:50% 0 auto auto;width:51%;translate:0 -50%;
