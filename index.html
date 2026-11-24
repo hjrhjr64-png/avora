@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#e1e1e1">
+  <meta name="description" content="Explore AVORA modular homes, from floor plans and facade finishes to interiors, wall layers and the construction process. Get in touch to discuss your project.">
+  <title>AVORA Modular Homes | One clear idea of home</title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="AVORA">
+  <meta property="og:title" content="AVORA Modular Homes | One clear idea of home">
+  <meta property="og:description" content="Explore the floor plans, facades, interiors and construction of AVORA modular homes.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="AVORA Modular Homes | One clear idea of home">
+  <meta name="twitter:description" content="Explore the floor plans, facades, interiors and construction of AVORA modular homes.">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "AVORA",
+      "description": "Floor plans, facades, interiors and construction of AVORA modular homes.",
+      "inLanguage": "en",
+      "publisher": {"@type": "Organization", "name": "AVORA"}
+    }
+  </script>
+  <link rel="icon" href="assets/design/letter-1.svg">
+  <link rel="preload" href="assets/models/hero-front-4k.webp" as="image" fetchpriority="high">
+  <link rel="preload" href="assets/fonts/archivo-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="content.js"></script>
+  <script defer src="smooth-corners.js"></script>
+  <script defer src="frame-sequence.js"></script>
+  <script defer src="scrub-film.js"></script>
+  <script defer src="site.js"></script>
+</head>
+<body>
+<dialog id="preloader" aria-label="Loading AVORA">
+  <span class="loader-label" aria-hidden="true">Loading...</span>
+  <img class="loader-mark" src="assets/design/letter-3.svg" width="153" height="108" alt="">
+  <span class="loader-count" role="progressbar" aria-label="Loading site media" aria-valuenow="0">000%</span>
+</dialog>
+<script>
+  // Open before the hero is parsed so its entrance begins on the first visible frame.
+  const startupOverlay = document.getElementById('preloader');
+  startupOverlay.showModal();
+  startupOverlay.addEventListener('cancel', event => event.preventDefault());
+  const startupFallback = setTimeout(() => {
+    if (!startupOverlay.hasAttribute('data-tracking')) startupOverlay.close();
+  }, 12000);
+  startupOverlay.addEventListener('close', () => clearTimeout(startupFallback), {once:true});
+</script>
+<header class="mast" id="mast">
+  <div class="bar"><button class="micro" id="menu-button" aria-haspopup="dialog" aria-controls="menu">Menu</button><a class="compact-wordmark" href="#home" aria-label="AVORA home"><img src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt=""></a><a class="micro" href="#contact">Discuss<span class="desktop-word"> the project</span></a></div>
+  <a class="brand" href="#home" aria-label="AVORA home"></a>
+</header>
+<dialog id="menu" aria-label="Site menu">
+  <div class="menu-top"><button id="close-menu" aria-label="Close menu" autofocus><img src="assets/design/menu-close.svg" width="24" height="24" alt=""></button><img class="menu-wordmark" src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt="AVORA"><a class="micro" href="#contact">Discuss<span class="desktop-word"> the project</span></a></div>
+  <div class="menu-body"><div><p class="micro">Explore the house</p><p class="menu-title">Every detail.<br>One considered home.</p></div>
+    <nav class="chapter-links numbered" aria-label="Chapters">
+      <a href="#home" aria-label="(01) Home"><small aria-hidden="true">(01)</small>Home</a>
+      <a href="#plans" aria-label="(02) Plans"><small aria-hidden="true">(02)</small>Plans</a>
+      <a href="#facades" aria-label="(03) Facades"><small aria-hidden="true">(03)</small>Facades</a>
+      <a href="#interiors" aria-label="(04) Interiors"><small aria-hidden="true">(04)</small>Interiors</a>
+      <a href="#wall-system" aria-label="(05) Wall system"><small aria-hidden="true">(05)</small>Wall system</a>
+      <a href="#how-we-build" aria-label="(06) How we build"><small aria-hidden="true">(06)</small>How we build</a>
+    </nav>
+  </div>
+  <div class="menu-bottom micro"><div><a href="https://t.me/artem_unfa">Telegram</a><a href="https://artemkuzin.ru/" aria-label="X — Artem Kuzin’s website">X</a></div><a href="mailto:hello@avora.studio">hello@avora.studio</a></div>
+</dialog>
+<main>
+<div class="story" id="story">
+  <div class="anchor" id="home" tabindex="-1" aria-label="Home"></div>
+  <div class="anchor" id="plans" tabindex="-1" aria-label="Plans"></div>
+  <div class="anchor" id="facades" tabindex="-1" aria-label="Facades"></div>
+  <div class="anchor" id="interiors" tabindex="-1" aria-label="Interiors"></div>
+  <div class="anchor" id="wall-system" tabindex="-1" aria-label="Wall system"></div>
+  <div class="anchor" id="how-we-build" tabindex="-1" aria-label="How we build"></div>
+  <div class="anchor" id="contact" tabindex="-1" aria-label="Discuss the project"></div>
+  <div class="viewport">
+    <section class="scene hero live first-visit" aria-label="Welcome">
+      <div class="hero-ground" aria-hidden="true"><img src="assets/models/hero-front-4k.webp" alt=""></div>
+      <div class="hero-house"><img id="pullback" src="assets/models/hero-front-4k.webp" alt="Front elevation of the AVORA home" fetchpriority="high"></div>
+      <div class="hero-copy"><div class="opening-copy"><p class="micro eyebrow">Made for real life</p><h1>One clear <span>idea of home</span></h1><p class="subtitle">Thoughtful spaces for living resting and being together</p></div></div>
+    </section>
+    <section class="scene panorama" aria-label="The village"><canvas id="village-frames" width="1920" height="1080" aria-hidden="true"></canvas><picture class="village-still" aria-hidden="true"><source type="image/avif" media="(max-width:600px) and (max-aspect-ratio:7/12)" data-srcset="assets/design/village-narrow.avif"><source media="(max-width:1024px) and (orientation:portrait)" data-srcset="assets/design/village-portrait.webp"><img data-src="assets/film/panorama-frames-1440/0001.jpg" alt=""></picture></section>
+    <section class="scene scene-title" id="shape-title"><h2>Simple shape. Unique character.</h2></section>
+    <section class="scene geometry" aria-label="House models and floor plans">
+      <div class="model-frame"><canvas id="house-sequence" width="1920" height="1280" role="img" aria-label="AVORA house in isometric view"></canvas></div>
+      <div id="plans-cards"></div>
+    </section>
+    <section class="scene facades" aria-label="Facade finishes">
+      <div class="facade-field" aria-hidden="true"></div>
+      <canvas class="facade-turn" aria-hidden="true" hidden></canvas>
+      <div class="mask-shade"></div><div class="mask-title"><h2>Form follows life</h2></div>
+    </section>
+    <section class="scene interiors" aria-label="Interiors">
+      <div class="interior-frame">
+        <div id="interior-images"></div>
+        <article class="interior-card" aria-labelledby="interior-title">
+          <div class="interior-copy">
+            <h3 id="interior-title"></h3>
+            <div class="interior-summary"><span class="interior-rule" aria-hidden="true"></span><p id="interior-description"></p></div>
+          </div>
+          <div class="interior-controls">
+            <div id="interior-count" aria-hidden="true"><strong></strong><span></span></div>
+            <div id="interior-slider" tabindex="0" role="slider" aria-label="Choose interior"
+                 aria-orientation="vertical" aria-valuemin="1" aria-valuenow="1">
+              <span class="interior-rail" aria-hidden="true"></span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+    <section class="scene scene-title" id="wall-title"><h2>What comfort is built on</h2></section>
+    <section class="scene wall" aria-label="Wall system"><canvas id="wall-sequence" width="768" height="2560" role="img" aria-label="Exploded 3D assembly of the wall layers"></canvas><div id="wall-cards"></div></section>
+    <section class="scene scene-title" id="build-title"><h2>How it all comes together</h2></section>
+    <section class="scene construction" aria-label="Construction process">
+      <article class="process-card" aria-labelledby="build-title-current">
+        <div id="build-copy"><p class="process-kicker"></p><h3 id="build-title-current"></h3><p class="process-description"></p></div>
+        <div class="build-controls">
+          <p id="build-count" aria-hidden="true"><strong></strong> — <span></span></p>
+          <div id="build-slider" tabindex="0" role="slider" aria-label="Choose construction stage"
+               aria-valuemin="1" aria-valuenow="1">
+            <span class="build-rail" aria-hidden="true"></span>
+          </div>
+        </div>
+      </article>
+      <div class="process-frame" id="build-images"></div>
+    </section>
+    <section class="scene enquiry" aria-label="Discuss the project">
+      <form id="enquiry-form" aria-labelledby="enquiry-title" novalidate>
+        <div class="form-head">
+          <h2 id="enquiry-title">Discuss <br>the project</h2>
+          <p id="enquiry-intro">Leave your contact details — we will get in touch with you.</p>
+          <p id="form-status" role="status" tabindex="-1"></p>
+          <a id="enquiry-draft" hidden></a>
+        </div>
+        <div class="form-body">
+          <div class="fields">
+            <label><span class="field-label" id="name-label">Name</span><input name="name" placeholder="Name" autocomplete="name" required maxlength="120" aria-labelledby="name-label" aria-describedby="name-note"><span class="field-note" id="name-note"></span></label>
+            <label class="phone-field">
+              <span class="field-label" id="phone-label">Phone</span>
+              <input name="phone" type="tel" inputmode="numeric" placeholder="Phone" autocomplete="tel" required maxlength="48" aria-labelledby="phone-label" aria-describedby="phone-note phone-format">
+              <span class="field-note" id="phone-note"></span>
+              <span class="field-label" id="phone-format">Enter 10 digits after +7.</span>
+            </label>
+            <label><span class="field-label" id="message-label">Requests or questions</span><textarea name="message" placeholder="Requests or questions" maxlength="2000" aria-labelledby="message-label" aria-describedby="message-note"></textarea><span class="field-note" id="message-note"></span></label>
+          </div>
+          <span class="enquiry-confirmation" aria-hidden="true" hidden></span>
+        </div>
+        <div class="form-end">
+          <button type="submit">Submit application</button>
+        </div>
+      </form>
+      <div class="contact-film-window"><div class="contact-film"><video id="forest-film" muted loop playsinline preload="none"></video></div></div>
+    </section>
+  </div>
+</div>
+</main>
+<footer id="footer">
+  <nav class="chapter-links" aria-label="Footer navigation">
+    <a href="#home">Home</a>
+    <a href="#plans">Plans</a>
+    <a href="#facades">Facades</a>
+    <a href="#interiors">Interiors</a>
+    <a href="#wall-system">Wall system</a>
+    <a href="#how-we-build">How we build</a>
+  </nav>
+  <div class="socials micro"><a href="https://artemkuzin.ru/" aria-label="X — Artem Kuzin’s website">X</a><a href="https://t.me/artem_unfa">Telegram</a></div>
+  <div class="footer-info"><span class="micro">© 2026 AVORA</span><a class="email" href="mailto:hello@avora.studio">hello@avora.studio</a><button id="privacy-button" class="micro">Privacy policy</button></div>
+  <a class="footer-brand" href="#home" aria-label="AVORA home"><img src="assets/design/footer-wordmark.svg" width="1919" height="296" alt=""></a>
+</footer>
+<dialog id="privacy" aria-labelledby="privacy-heading"><h2 id="privacy-heading">Privacy policy</h2><p>The enquiry form prepares a message in your email app. Your contact details are shared with AVORA when you send that message.</p><button class="micro" autofocus>Close</button></dialog>
+</body>
+</html>
