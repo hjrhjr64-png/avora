@@ -847,7 +847,11 @@ function renderPlanRail(t) {
 }
 function houseAndPlans(t) {
   const active = visible('geometry', t >= 5.12 && t < interiorArrival);
-  if (t > (tabletHouse ? 3.2 : 4.4) && t < 5.12) house.set(orbitFolder, 1, 150);
+  if (t > (tabletHouse ? 3.2 : 4.4) && t < 5.12) {
+    // Only the entrance pose is needed while the panorama is still on screen.
+    if (tabletHouse) house.set(orbitFolder, 1, 1, false);
+    else house.set(orbitFolder, 1, 150);
+  }
   if (!active) {
     plansOpen = false;
     return;
