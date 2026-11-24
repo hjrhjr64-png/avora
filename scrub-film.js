@@ -71,11 +71,27 @@ class MatteCanvas {
       gl.texParameteri(gl.TEXTURE_2D, key, gl.LINEAR);
     return texture;
   }
-  warmStill(source, width) {
-    const plane = document.createElement('canvas');
-    plane.width = Math.min(width, source.naturalWidth);
-    plane.height = Math.round((plane.width * source.naturalHeight) / source.naturalWidth);
-    plane.getContext('2d').drawImage(source, 0, 0, plane.width, plane.height);
+  async warmStill(source, width) {
+    const w = Math.min(width, source.naturalWidth);
+    const h = Math.round(w * source.naturalHeight / source.naturalWidth);
+    let plane;
+    if (window.createImageBitmap) {
+      try {
+        plane = await createImageBitmap(source, {
+          resizeWidth:w, resizeHeight:h, resizeQuality:'high', premultiplyAlpha:'none'
+        });
+        if (plane.width !== w || plane.height !== h) {
+          plane.close();
+          plane = null;
+        }
+      } catch { /* Some engines do not support resizing an ImageBitmap. */ }
+    }
+    if (!plane) {
+      plane = document.createElement('canvas');
+      plane.width = w;
+      plane.height = h;
+      plane.getContext('2d').drawImage(source, 0, 0, w, h);
+    }
     if (this.gl) {
       const gl = this.gl,
         texture = this.texture();
@@ -155,41 +171,70 @@ class ScrubFilm {
     if (this.rasterWidth === width) return;
     this.rasterWidth = width;
     this.shown = null;
-    for (const [index, image] of this.masters) this.prepareStill(index, image);
+    for (const [index, image] of this.masters) this.prepareStill(index, image).catch(() => {});
   }
-  prepareStill(index, image) {
-    this.matte ??= new MatteCanvas(this.canvas, this.matteLayout === 'side');
-    const old = this.stills.get(index);
-    if (old && this.matte.gl) this.matte.gl.deleteTexture(this.matte.staticTextures.get(old));
+  async prepareStill(index, image) {
+    const width = this.rasterWidth;
     this.masters.set(index, image);
-    this.stills.set(index, this.matte.warmStill(image, this.rasterWidth));
+    this.matte ??= new MatteCanvas(this.canvas, this.matteLayout === 'side');
+    const plane = await this.matte.warmStill(image, width);
+    const discard = this.rasterWidth === width ? this.stills.get(index) : plane;
+    if (discard) {
+      if (this.matte.gl) this.matte.gl.deleteTexture(this.matte.staticTextures.get(discard));
+      discard.close?.();
+    }
+    if (this.rasterWidth === width) {
+      this.stills.set(index, plane);
+      if (this.shown?.index === index) this.shown = null;
+      schedule();
+    }
   }
-  loadOnline(preload) {
+  warmStills() {
+    return this.loadingStills ??= Promise.allSettled(
+      Object.entries(this.stillPaths).map(async ([index, path]) => {
+        const image = new Image();
+        const url = await mediaSource(path);
+        try {
+          image.src = url;
+          await image.decode();
+          await this.prepareStill(+index, image);
+        } finally {
+          if (url !== path) URL.revokeObjectURL(url);
+        }
+      })
+    );
+  }
+  loadOnline(preload = {}) {
     return this.loading ??= this.prepare(true, preload).then(schedule, () => {
       this.failed = true;
       schedule();
     });
   }
-  async preloadMovie({signal, progress}) {
+  async preloadMovie({signal, progress = () => {}}) {
     const response = await fetch(this.remoteVideo, {signal});
     if (!response.ok) throw new Error('Unavailable film ' + this.remoteVideo);
     const size = Number(response.headers.get('Content-Length'));
     if (!response.body || !size || response.headers.has('Content-Encoding')) {
-      this.blob = await response.blob();
+      this.bytes = new Uint8Array(await response.arrayBuffer());
       return;
     }
-    const bytes = new Uint8Array(size);
+    const download = {bytes:new Uint8Array(size), received:0};
     const reader = response.body.getReader();
-    let received = 0;
-    for (;;) {
-      const {done, value} = await reader.read();
-      if (done) break;
-      bytes.set(value, received);
-      received += value.length;
-      progress(received / size);
+    this.download = download;
+    try {
+      for (;;) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        download.bytes.set(value, download.received);
+        download.received += value.length;
+        progress(download.received / size);
+      }
+      if (download.received !== size || size < this.starts.at(-1)) throw new Error('Incomplete film');
+      this.bytes = download.bytes;
+      this.groups.clear();
+    } finally {
+      this.download = null;
     }
-    if (received !== size || received < this.starts.at(-1)) throw new Error('Incomplete film');
-    this.bytes = bytes;
   }
   async prepare(online = false, preload) {
     const manifestPath = this.path + '.json';
@@ -210,24 +255,12 @@ class ScrubFilm {
     if (online) {
       this.remoteVideo = this.path + '.mp4';
       this.groups = new Map();
-      if (preload) {
+      if (preload?.blocking) {
         try { await this.preloadMovie(preload); }
         catch { /* Keep range and still-image playback available after an interrupted download. */ }
       }
     }
-    await Promise.allSettled(
-      Object.entries(this.stillPaths).map(async ([index, path]) => {
-        const image = new Image(),
-          url = await mediaSource(path);
-        try {
-          image.src = url;
-          await image.decode();
-          this.prepareStill(+index, image);
-        } finally {
-          if (url !== path) URL.revokeObjectURL(url);
-        }
-      })
-    );
+    if (!online || preload?.blocking) await this.warmStills();
     try {
       const description = Uint8Array.from(m.avcc.match(/../g), (v) => parseInt(v, 16));
       const config = {
@@ -244,6 +277,7 @@ class ScrubFilm {
         if (online) this.blob = null;
       }
       this.config = config;
+      if (online && preload && !preload.blocking) this.preloadMovie(preload).then(schedule, schedule);
     } catch {
       try {
         await this.nativeVideo();
@@ -309,26 +343,30 @@ class ScrubFilm {
     const group = m.keys.findLastIndex((k) => k <= index);
     const begin = m.keys[group],
       end = m.keys[group + 1] ?? m.sizes.length;
-    const saved = this.groups?.get(begin);
+    const streamed = this.download?.received >= this.starts[end] ? {bytes:this.download.bytes, base:0} : null;
+    const saved = this.groups?.get(begin) ?? streamed;
     if (this.decoding != null) {
       const pending = this.groupRequest;
-      if (speculative || this.decoding === begin || !pending || (!saved && !pending.speculative)) return;
+      if (speculative || this.decoding === begin || !pending || (!this.bytes && !saved && !pending.speculative)) return;
       // A requested pose takes precedence over a neighbour being warmed. A
       // return to an already buffered group can also interrupt a network wait.
       pending.controller.abort();
       this.groupRequest = null;
     }
-    // Retain the current and adjacent group. Release frames before feeding the
-    // hardware decoder so reverse scrubbing cannot exhaust its surface pool.
-    for (const [i, f] of this.frames) {
+    // Keep both neighbours available for an immediate change of direction.
+    for (const [i, frame] of this.frames) {
       if (i < begin - (end - begin) || i >= end + (end - begin)) {
-        f.close();
+        frame.close();
         this.frames.delete(i);
       }
     }
     if (!this.decoder) {
       const decoder = (this.decoder = new VideoDecoder({
         output: (f) => {
+          if (this.decoder !== decoder) {
+            f.close();
+            return;
+          }
           const i = Math.round((f.timestamp * this.fps) / 1e6);
           this.frames.get(i)?.close();
           this.frames.set(i, f);
@@ -427,7 +465,7 @@ class ScrubFilm {
     } else if (this.config) {
       const frame = this.frames.get(index);
       if (!frame) this.decodeGroup(index);
-      if (!frame && !this.bytes && this.remoteVideo && (!this.shown || this.shown.frame))
+      if (!frame && !this.bytes && this.remoteVideo && (!this.shown || this.shown.frame) && !this.download?.received)
         this.setImage(folder, position, total, paint);
       if (paint && (this.shown?.index !== index || this.shown.frame)) {
         if (frame) this.paint(frame, folder, index);

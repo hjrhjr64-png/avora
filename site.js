@@ -372,7 +372,9 @@ const landscapePanorama = !packagedMedia && !compactMedia && panoramaPixels <= 1
 const villagePath = compactMedia && adaptiveLayout.matches ? 'assets/film/panorama-phone'
   : adaptiveLayout.matches ? 'assets/film/panorama' : landscapePanorama;
 const villageFolder = adaptiveLayout.matches ? 'assets/film/panorama-frames' : 'assets/film/panorama-frames-1440';
-const village = new ScrubFilm(villageCanvas,{path:villagePath,
+// Narrow landscape already has its own lightweight track.
+const onlineVillage = villagePath === scrubPath('village', 'mobile') ? villagePath : villagePath + '-web';
+const village = new ScrubFilm(villageCanvas,{path:packagedMedia ? villagePath : onlineVillage,
   fallback:{asset:(folder,index) => sequenceAsset(folder,index,'jpg')}});
 const orbitFolder = models + 'orbit';
 const morphFolder = models + 'morph';
@@ -1526,20 +1528,13 @@ const readingGroups = [
   [...Array.from({length:buildLast + 1}, (_, index) => buildTime(index)), formArrival + .02]
 ];
 
-function usesNativeReadingEntry(stop) {
+function usesInstantReadingEntry(stop) {
   return stop?.entry && (interiorStops.includes(stop.time) || wallStops.includes(stop.time));
 }
 
 // Outside a gallery, native input owns the page up to its actual boundary.
 // Within it, choose the next authored reading pose in the gesture direction.
 function nextReadingStop(y, delta) {
-  // A fresh swipe can advance from the committed slide. An opposite swipe
-  // always uses the live position so it can reverse mid-transition.
-  const gallery = selectedSlide?.gallery;
-  if ((gallery === interiorGallery || gallery === wallGallery || (gallery === buildGallery && isPortraitTablet())) &&
-      selectedSlide.direction === Math.sign(delta)) {
-    y = Math.round(scrollAt(gallery.time(selectedSlide.slide)));
-  }
   for (const times of delta > 0 ? readingGroups : readingGroups.toReversed()) {
     const first = Math.round(scrollAt(times[0])), last = Math.round(scrollAt(times.at(-1)));
     if (y < first - 1) {
@@ -1568,22 +1563,21 @@ function moveToReadingStop(time) {
   } else if (wallSlide >= 0) {
     const wallDuration = clamp(distance * wallSlideDuration, 180, wallSlideDuration);
     animateToTime(time, wallDuration, wallGallery, wallSlide, ease);
-  } else if (isPortraitTablet() && time >= buildStart && time <= buildTime(buildLast)) {
+  } else if (time >= buildStart && time <= buildTime(buildLast)) {
     animateToTime(time, duration, buildGallery, Math.round((time - buildStart) / buildInterval), curve);
   } else animateToTime(time, duration, null, null, curve);
+  if (selectedSlide) selectedSlide.readingTime = time;
 }
 function acceptsPageGesture(event) {
   return !event.defaultPrevented && !document.querySelector('dialog[open]') &&
     !event.target.closest?.('input,textarea,select,[contenteditable="true"]');
 }
-let wheelGesture = null, finger = null, nativeTouch = null;
-let wheelBurst = null, lastLongSwipe = -Infinity;
+let wheelGesture = null, finger = null;
 const wheelStepThreshold = 16;
+const wheelQuietTime = 180;
 const fineWheelPause = 350;
 function resetGestures() {
-  wheelBurst = null;
-  lastLongSwipe = -Infinity;
-  wheelGesture = finger = nativeTouch = null;
+  wheelGesture = finger = null;
   interruptScroll();
 }
 window.addEventListener('pointerdown', event => {
@@ -1592,187 +1586,124 @@ window.addEventListener('pointerdown', event => {
 for (const type of ['resize', 'popstate']) window.addEventListener(type, resetGestures);
 motion.addEventListener('change', resetGestures);
 
-function startsAnotherWheelStep(gesture, gap, magnitude) {
-  if (gesture?.stop == null) return false;
-  // A new stroke can arrive before the previous slide has reached its stop.
-  // After a lull, resumed input of similar strength counts as a new stroke.
-  const pause = magnitude >= height * .5 ? 24 : 42;
-  if (gap >= pause && magnitude >= Math.max(6, gesture.magnitude * .9)) return true;
-  // Without a lull, require either a clear rebound or two rising packets.
-  const low = gesture.riseFrom ?? gesture.magnitude;
-  if (magnitude < gesture.magnitude + 1 || low > gesture.peak * .72) {
-    gesture.riseFrom = null;
-    return false;
-  }
-  const risingTwice = gesture.riseFrom != null;
-  gesture.riseFrom = low;
-  return risingTwice
-    ? magnitude >= Math.max(4, low + 3, low * 1.25)
-    : low <= gesture.peak * .55 && magnitude >= Math.max(5, low + 3, low * 1.55);
+function readingOrigin(y, direction) {
+  if (selectedSlide?.direction !== direction) return y;
+  const {gallery, slide, readingTime} = selectedSlide;
+  const time = readingTime ?? (gallery === interiorGallery || gallery === buildGallery ? gallery.time(slide) : null);
+  return time == null ? y : Math.round(scrollAt(time));
+}
+
+function finishReadingInput(stop, origin, delta) {
+  if (stop?.entry && usesInstantReadingEntry(stop)) animateToTime(stop.time, 0);
+  else if (stop) moveToReadingStop(stop.time);
+  else if (selectedSlide && origin !== window.scrollY) selectedSlide.exitDelta ??= delta;
+}
+
+function startsAnotherWheelStep(gesture, gap, magnitude, now) {
+  if (gap > wheelQuietTime) return true;
+  if (!gesture.handled) return false;
+  // A new stroke can overtake the decaying tail. A small rebound or the
+  // continuing slowdown of one stroke must never advance another frame.
+  const rebounds = magnitude >= Math.max(18, gesture.last * 2, Math.min(36, gesture.peak * .25));
+  if (gesture.last <= gesture.peak * .45 && rebounds && gap >= 24) return true;
+  // A stream of strong, steady detents may traverse a gallery. Advance at
+  // reading stops, even while the wheel is being spun continuously.
+  return now - gesture.start >= 420 && gesture.steady >= 4 &&
+    magnitude >= 48 && magnitude >= gesture.last * .96;
 }
 
 window.addEventListener('wheel', event => {
   if (!acceptsPageGesture(event) || !event.cancelable || event.ctrlKey || event.metaKey ||
       event.shiftKey || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-  nativeTouch = finger = null;
-  const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1);
+  finger = null;
+  const mode = event.deltaMode;
+  const delta = event.deltaY * (mode === 1 ? 16 : mode === 2 ? height : 1);
   const direction = Math.sign(delta), magnitude = Math.abs(delta), now = event.timeStamp;
-  // Continuous travel belongs to the native scroller. A single reading gesture
-  // still settles on a slide, including fine wheel ticks and their inertial tail.
-  if (!wheelBurst || now - wheelBurst.time > 140 ||
-      (!wheelBurst.native && direction !== wheelBurst.direction)) {
-    wheelBurst = {direction, distance:0, packets:0, native:false};
-  }
-  wheelBurst.time = now;
-  wheelBurst.distance += magnitude;
-  wheelBurst.packets++;
-  if (wheelBurst.packets >= 3 && wheelBurst.distance >= height * .85) wheelBurst.native = true;
-  if (wheelBurst.native) {
-    wheelGesture = null;
-    interruptScroll();
-    return;
-  }
-  const y = window.scrollY;
   const previous = wheelGesture;
-  const gap = previous ? now - previous.time : Infinity;
+  const gap = now - (previous?.time ?? -Infinity);
   const sameDirection = previous?.direction === direction;
-  const fineTail = sameDirection && previous.fine && selectedSlide?.gallery === interiorGallery &&
-    gap <= fineWheelPause && magnitude < wheelStepThreshold;
-  const freshImpulse = sameDirection && !fineTail && startsAnotherWheelStep(previous, gap, magnitude);
-  if (!sameDirection || (gap > 100 && !fineTail) || freshImpulse) {
-    const fromStop = selectedSlide?.direction === direction ? previous?.stop ?? previous?.fromStop : null;
-    // Small, deliberate wheel ticks can be spaced farther apart than a
-    // continuous trackpad gesture. Keep their uncommitted travel in the gallery.
-    const continueFineInput = sameDirection && previous.stop == null && gap <= fineWheelPause &&
-      y >= Math.round(scrollAt(interiorStops[0])) && y <= Math.round(scrollAt(interiorStops.at(-1)));
-    wheelGesture = {direction, distance:continueFineInput ? previous.distance : 0, peak:0, fromStop};
+  if (!sameDirection || startsAnotherWheelStep(previous, gap, magnitude, now)) {
+    const keepFineInput = sameDirection && !previous.handled && gap <= fineWheelPause;
+    wheelGesture = {direction, start:now, time:now, distance:keepFineInput ? previous.distance : 0,
+      last:magnitude, peak:magnitude, steady:0, handled:false};
   }
-  Object.assign(wheelGesture, {time:now, magnitude, peak:Math.max(wheelGesture.peak, magnitude)});
-  if (wheelGesture.stop != null) {
+  const gesture = wheelGesture;
+  gesture.steady = magnitude >= 48 && magnitude >= gesture.last * .96 ? gesture.steady + 1 : 0;
+  gesture.last = magnitude;
+  gesture.peak = Math.max(gesture.peak, magnitude);
+  gesture.time = now;
+  if (gesture.handled) {
     event.preventDefault();
     return;
   }
-  // Fresh impulses during a slide step from its destination. Reversals
-  // always start at the live position, as does native movement at either edge.
-  const committed = selectedSlide?.direction === direction ? wheelGesture.fromStop : null;
-  const stop = nextReadingStop(committed == null ? y : Math.round(scrollAt(committed)), delta);
-  if (!stop) {
-    if (committed != null) {
-      selectedSlide.exitDelta ??= delta;
-      wheelGesture.stop = committed;
-      event.preventDefault();
-      return;
-    }
-    wheelGesture.distance = 0;
+  const y = window.scrollY;
+  const origin = readingOrigin(y, direction);
+  const stop = nextReadingStop(origin, delta);
+  if (!stop && origin === y) {
+    gesture.distance = 0;
     interruptScroll();
     return;
   }
+
   event.preventDefault();
-  wheelGesture.distance += magnitude;
-  const reversing = selectedSlide?.direction === -direction && wheelGesture.distance >= 6;
-  if (!stop.entry && !freshImpulse && !reversing && wheelGesture.distance < wheelStepThreshold &&
-      Math.abs(scrollAt(stop.time) - y) > magnitude) return;
-  wheelGesture.fine = !stop.entry && magnitude < wheelStepThreshold && wheelGesture.distance > magnitude &&
-    interiorStops.includes(stop.time);
-  wheelGesture.stop = stop.time;
-  if (stop.entry) animateToTime(stop.time, 0);
-  else moveToReadingStop(stop.time);
+  gesture.distance += magnitude;
+  const threshold = selectedSlide?.direction === -direction ? 12 : wheelStepThreshold;
+  if (!stop?.entry && gesture.distance < threshold &&
+      (!stop || Math.abs(scrollAt(stop.time) - y) > gesture.distance)) return;
+  gesture.handled = true;
+  finishReadingInput(stop, origin, direction * gesture.distance);
 }, {passive:false});
 
 window.addEventListener('touchstart', event => {
-  wheelBurst = null;
-  wheelGesture = finger = nativeTouch = null;
+  wheelGesture = finger = null;
   if (!acceptsPageGesture(event) || event.touches.length !== 1) return;
   const touch = event.touches[0];
-  finger = {x:touch.clientX, y:touch.clientY, used:false, free:event.timeStamp - lastLongSwipe < 220};
-  if (!finger.free) nativeTouch = {startY:window.scrollY, y:window.scrollY};
+  finger = {x:touch.clientX, y:touch.clientY, previousY:touch.clientY, axis:null, handled:false};
 }, {passive:true});
 window.addEventListener('touchmove', event => {
-  if (!finger || event.touches.length !== 1) return;
-  if (finger.free) {
-    if (Math.abs(finger.y - event.touches[0].clientY) > Math.abs(finger.x - event.touches[0].clientX)) interruptScroll();
-    return;
+  if (!finger || event.touches.length !== 1 || !event.cancelable) return;
+  const touch = event.touches[0], distance = finger.y - touch.clientY;
+  if (!finger.axis) {
+    if (!distance && touch.clientX === finger.x) return;
+    finger.axis = Math.abs(distance) > Math.abs(touch.clientX - finger.x) ? 'vertical' : 'horizontal';
   }
-  if (finger.used) {
-    if (event.cancelable) event.preventDefault();
-    return;
-  }
-  const touch = event.touches[0], delta = finger.y - touch.clientY;
-  if (!delta || Math.abs(delta) <= Math.abs(touch.clientX - finger.x)) return;
-  const stop = nextReadingStop(nativeTouch?.startY ?? window.scrollY, delta);
-  if (usesNativeReadingEntry(stop)) return;
-  const target = stop?.time;
-  if (!event.cancelable) {
-    // Some browsers keep the next touch on the compositor after a native
-    // fling. Remember its intended stop and settle when native motion ends.
-    if (nativeTouch && Math.abs(delta) >= 24) nativeTouch.pending = target;
-    return;
-  }
-  if (target == null) {
-    interruptScroll();
-    return;
-  }
+  if (finger.axis !== 'vertical') return;
+
+  // Drive the vertical timeline from this contact. A compositor fling has no
+  // remaining distance that can run into the following scene or swipe.
   event.preventDefault();
-  if (Math.abs(delta) < 24) return;
-  nativeTouch = null;
-  finger.used = true;
-  moveToReadingStop(target);
-}, {passive:false});
-let touchIdleTimer;
-function settleNativeTouch() {
-  if (finger || !nativeTouch || nativeTouch.stop != null) return;
-  const {pending} = nativeTouch;
-  if (pending == null) return;
-  nativeTouch = null;
-  moveToReadingStop(pending);
-}
-function waitForNativeTouch() {
-  clearTimeout(touchIdleTimer);
-  if (!finger && nativeTouch?.pending != null && nativeTouch.stop == null)
-    touchIdleTimer = setTimeout(settleNativeTouch, 120);
-}
-window.addEventListener('touchend', event => {
-  const touch = event.changedTouches[0];
-  if (finger && touch) {
-    const dy = Math.abs(touch.clientY - finger.y);
-    lastLongSwipe = dy >= height * .18 && dy > Math.abs(touch.clientX - finger.x) ? event.timeStamp : -Infinity;
-  }
-  finger = null;
-  waitForNativeTouch();
-}, {passive:true});
-window.addEventListener('touchcancel', () => { finger = nativeTouch = null; }, {passive:true});
-window.addEventListener('scrollend', settleNativeTouch, {passive:true});
-// A native fling can cross a gallery boundary after touchend. Land on the
-// first crossed stop and absorb the rest of that same fling until new input.
-window.addEventListener('scroll', () => {
-  if (!nativeTouch || selectedSlide) return;
+  if (finger.handled) return;
+  const delta = finger.previousY - touch.clientY;
+  if (!delta) return;
   const y = window.scrollY;
-  if (nativeTouch.stop == null && nativeTouch.y !== y) {
-    const stop = nextReadingStop(nativeTouch.y, y - nativeTouch.y)?.time;
-    if (stop != null) {
-      const target = Math.round(scrollAt(stop));
-      if ((target - nativeTouch.y) * (target - y) <= 0) nativeTouch.stop = target;
-    }
+  const origin = readingOrigin(y, Math.sign(delta));
+  const stop = nextReadingStop(origin, delta);
+  if (stop || origin !== y) {
+    if (!stop?.entry && Math.abs(distance) < 24) return;
+    finger.handled = true;
+    finishReadingInput(stop, origin, delta);
+    return;
   }
-  nativeTouch.y = y;
-  if (nativeTouch.stop != null) {
-    if (finger) finger.used = true;
-    if (nativeTouch.stop !== y) window.scrollTo({top:nativeTouch.stop, behavior:'instant'});
-  } else waitForNativeTouch();
-}, {passive:true});
+  interruptScroll();
+  finger.previousY = touch.clientY;
+  window.scrollBy({top:delta,behavior:'instant'});
+}, {passive:false});
+for (const type of ['touchend', 'touchcancel']) {
+  window.addEventListener(type, () => { finger = null; }, {passive:true});
+}
 window.addEventListener('keydown', event => {
   if (!acceptsPageGesture(event) || event.altKey || event.ctrlKey || event.metaKey ||
       event.target.closest?.('button,a,[role="slider"]')) return;
   const direction = {ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1,' ':event.shiftKey ? -1 : 1}[event.key];
-  wheelGesture = nativeTouch = null;
+  wheelGesture = finger = null;
   if (!direction) { interruptScroll(); return; }
   const stride = event.key.startsWith('Arrow') ? 40 : height * .9;
   const y = window.scrollY;
-  const stop = nextReadingStop(y, direction * stride);
+  const stop = nextReadingStop(readingOrigin(y, direction), direction * stride);
   if (stop == null) { interruptScroll(); return; }
   event.preventDefault();
   if (event.repeat) return;
-  if (usesNativeReadingEntry(stop)) animateToTime(stop.time, 0);
+  if (usesInstantReadingEntry(stop)) animateToTime(stop.time, 0);
   else moveToReadingStop(stop.time);
 });
 
@@ -1970,17 +1901,18 @@ if (location.hash && document.getElementById(location.hash.slice(1))) document.g
 render();
 
 function prepareOnlineMedia(t) {
-  if (t > .18 && t < 5.25 && !scenes.panorama.style.getPropertyValue('--panorama-poster')) {
+  if (t < 6.2 && !village.loading) village.loadOnline();
+  if (t > .18 && t < 6.2 && !scenes.panorama.style.getPropertyValue('--panorama-poster')) {
     loadImage($('.village-still img'));
     scenes.panorama.style.setProperty('--panorama-poster', `url("${sequenceAsset(villageFolder, 1, 'jpg')}")`);
-    village.loadOnline();
   }
-  if (!house.loading && t > 4.15 && t < 18.15) house.loadOnline();
-  if (t > 12.75 && t < 19.05 && !field.style.getPropertyValue('--facade-atlas')) {
+  if (!house.loading && t > 3.2 && t < 18.15) house.loadOnline();
+  if (!house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
+  if (t > 10.8 && t < 19.05 && !field.style.getPropertyValue('--facade-atlas')) {
     field.style.setProperty('--facade-atlas', `url("${facadePoster}")`);
     facadePose.loadOnline();
   }
-  if (!wall.loading && t > 22.2 && t < 31.5) wall.loadOnline();
+  if (!wall.loading && t > 20.2 && t < 31.5) wall.loadOnline();
 }
 
 function pageMedia() {
@@ -2021,19 +1953,19 @@ async function warmOpening(onProgress, signal) {
     : t >= buildEntry && t < filmArrival ? [stages[buildAt(t)]] : [pullback];
   images.forEach(loadImage);
   if (t >= filmArrival) forestFilm.poster = contactPoster;
-  const work = [...images.map(image => image.decode()), ...openingFonts()];
-  // The four selected films drive the scroll timeline. Keep their compressed
-  // bytes, and decode only a small window of frames around the current pose.
-  const progress = new Array(frameSequences.length + 1).fill(0);
-  function update(index, fraction) {
-    progress[index] = fraction;
-    onProgress(progress.reduce((sum, value) => sum + value, 0) / progress.length);
-  }
-  const films = frameSequences.map((sequence, index) =>
-    sequence.loadOnline({signal, progress:fraction => update(index, fraction)})
-      .finally(() => update(index, 1)));
-  await Promise.allSettled([...films, Promise.allSettled(work).then(() => update(frameSequences.length, 1))]);
-  if (!signal.aborted && village.bytes && village.config) village.decodeGroup(0);
+  const work = Promise.allSettled([...images.map(image => image.decode()), ...openingFonts()]);
+  const film = t < 4.25 ? village : t < 13.86 ? house : t < 16.85 ? facadePose
+    : t >= wallStart && t < wallEnd ? wall : null;
+  // The opening film must already be local when the first scroll arrives.
+  // Farther scenes fetch on approach and do not compete for startup bandwidth.
+  let imageProgress = 0, filmProgress = film ? 0 : 1;
+  const update = () => onProgress(.15 * imageProgress + .85 * filmProgress);
+  await Promise.all([
+    work.then(() => { imageProgress = 1; update(); }),
+    film?.loadOnline({blocking:true, signal, progress:fraction => { filmProgress = fraction; update(); }})
+      .finally(() => { filmProgress = 1; update(); })
+  ]);
+  if (film === village && !signal.aborted && village.bytes && village.config) village.decodeGroup(0);
 }
 
 async function warmMedia(onProgress, signal) {
