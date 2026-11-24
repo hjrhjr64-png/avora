@@ -883,3 +883,8 @@ dialog::backdrop{background:#17191866}
   .viewport,footer{overflow:clip}
   .viewport:has(.interiors.live){touch-action:pan-y pinch-zoom}
 }
+
+@media (max-width:600px) and (orientation:portrait) and (prefers-reduced-motion:no-preference){
+  /* Keep the opening house on its scroll trajectory during the first swipe. */
+  .hero.first-visit .hero-house{animation-name:appear}
+}

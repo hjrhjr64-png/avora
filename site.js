@@ -514,6 +514,34 @@ const pageTheme = themeColor?.content;
 const footerTheme = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
 let footerThemeActive = false;
 let mastScrollEdge = 0, mastPreviousY = 0, mastDirection = 0;
+let mastScrollAnimations = [];
+function measureMastMotion() {
+  for (const animation of mastScrollAnimations) animation.cancel();
+  mastScrollAnimations = [];
+  if (!adaptiveLayout.matches || width > 600 || motion.matches ||
+      !window.ScrollTimeline || !CSS.supports('animation-range', '0px 300px')) return;
+
+  const timeline = new ScrollTimeline({source:document.scrollingElement});
+  const options = {timeline, rangeStart:'0px', rangeEnd:clamp(height * .42, 220, 440) + 'px',
+    fill:'both', easing:'cubic-bezier(.333333,0,.666667,1)'};
+  const u = width / 390;
+  const large = 22 * u;
+  const widths = letterWidths.map(w => large * w / 108);
+  const gap = (width - 20 * u - widths.reduce((a,b) => a + b, 0)) / 4;
+  const pose = (x,y,scale) => 'translate3d(' + x + 'px,' + y + 'px,0) scale(' + scale + ')';
+  let left = 10 * u;
+  logo.forEach((img,i) => {
+    const h = large * letterHeights[i] / 108;
+    img.style.height = h + 'px';
+    const from = pose(left, 18 * u + (large - h) / 2, 1);
+    const to = pose(compactLogo.x + compactLogo.width * smallLeft[i], compactLogo.y, compactLogo.height / large);
+    mastScrollAnimations.push(img.animate([{transform:from},{transform:to}], options));
+    left += widths[i] + gap;
+  });
+  mastScrollAnimations.push(mastBar.animate([
+    {transform:'translateY(' + 51.106 * u + 'px)'}, {transform:'translateY(0px)'}
+  ], options));
+}
 function header(t, y) {
   const assemblyDistance = clamp(height * .42, 220, 440);
   const fraction = motion.matches ? Number(y > 0) : clamp(y / assemblyDistance);
@@ -546,18 +574,20 @@ function header(t, y) {
   const gap = (width - 2 * edge - fullWidths.reduce((a, b) => a + b, 0)) / 4;
   let left = edge;
   const openingBarTop = adapted ? (phone ? 51.106 : 80) * headerUnit : top + large + (portrait ? 12 : edge);
-  mastBar.style.transform = 'translateY(' + openingBarTop * (1 - progress) + 'px)';
   mastBar.style.setProperty('--top-rule-opacity', 1 - ease(range(fraction, 0, .22)));
-  const scale = 1 + (compact / large - 1) * progress;
-  logo.forEach((img, i) => {
-    const x = left + (compactLogo.x + compactWidth * smallLeft[i] - left) * progress;
-    const openingHeight = large * letterHeights[i] / 108;
-    const openingY = top + (large - openingHeight) / 2;
-    const yy = openingY + (compactLogo.y - openingY) * progress;
-    img.style.transform = 'translate3d(' + x + 'px,' + yy + 'px,0) scale(' + scale + ')';
-    img.style.height = openingHeight + 'px';
-    left += fullWidths[i] + gap;
-  });
+  if (!mastScrollAnimations.length) {
+    mastBar.style.transform = 'translateY(' + openingBarTop * (1 - progress) + 'px)';
+    const scale = 1 + (compact / large - 1) * progress;
+    logo.forEach((img, i) => {
+      const x = left + (compactLogo.x + compactWidth * smallLeft[i] - left) * progress;
+      const openingHeight = large * letterHeights[i] / 108;
+      const openingY = top + (large - openingHeight) / 2;
+      const yy = openingY + (compactLogo.y - openingY) * progress;
+      img.style.transform = 'translate3d(' + x + 'px,' + yy + 'px,0) scale(' + scale + ')';
+      img.style.height = openingHeight + 'px';
+      left += fullWidths[i] + gap;
+    });
+  }
   if (adapted && enteringFooter && !onDark) {
     mastScrollEdge = y;
     mast.classList.add('away');
@@ -1367,6 +1397,7 @@ function measure() {
   const compact = $('.compact-wordmark img').getBoundingClientRect();
   barHeight = bar.height;
   compactLogo = {x:compact.left - bar.left, y:compact.top - bar.top, width:compact.width, height:compact.height};
+  measureMastMotion();
   if (current < 2.1) heroCopyHeight = intro.offsetHeight || heroCopyHeight;
   unit = height * (portrait ? .82 : .75);
   overlapSpan = referenceCoverDistance * height / unit;
@@ -2017,7 +2048,7 @@ window.addEventListener('resize', () => {
 adaptiveLayout.addEventListener('change', measure);
 landscapePlans.addEventListener('change', measure);
 document.addEventListener('visibilitychange', schedule);
-motion.addEventListener('change', schedule);
+motion.addEventListener('change', () => { measureMastMotion(); schedule(); });
 observeSmoothCorners(all([
   '.plan-card', '.plan-stats > div', '.drawing', '#interior-images .slide-image', '.interior-card',
   '.wall-card', '.process-frame', '.process-card', '.contact-film', '#enquiry-form',
