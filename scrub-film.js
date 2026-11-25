@@ -277,7 +277,7 @@ class ScrubFilm {
         if (online) this.blob = null;
       }
       this.config = config;
-      if (online && preload && !preload.blocking) this.preloadMovie(preload).catch(() => {}).finally(() => {
+      if (online && preload && !preload.blocking && !preload.rangeOnly) this.preloadMovie(preload).catch(() => {}).finally(() => {
         this.downloadFinished = true;
         schedule();
       });

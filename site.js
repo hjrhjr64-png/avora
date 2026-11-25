@@ -19,12 +19,10 @@ function surfaceEase(x) {
   const u = (lower + upper) / 2;
   return u * (.3 + u * (2.4 - 1.7 * u));
 }
-// Authored transitions between reading stops and the adjacent chapters.
-const readingTravelDuration = 1200;
-const referenceSlideDuration = 1000;
+const wheelScrollDuration = 1.6;
+const gallerySelectDuration = .55;
 const referenceCoverDistance = .9;
 const referenceFade = progress => 1 - range(progress, .3, 1);
-const readingTravelEase = x => Math.min(1, 1.001 - 2 ** (-10 * x));
 const linear = x => x;
 const revealEase = scrollEase;
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -64,8 +62,6 @@ let overlapSpan, interiorEntry, interiorEnd;
 const facadesStop = 15.2;
 const interiorArrival = 18.05;
 const interiorFirstStop = 18.18;
-const interiorStart = 17.91;
-const interiorInterval = 1.17;
 const interiorExitStart = 23.82;
 const wallTitleStop = 25.12;
 const wallTitleExitStart = 25.23;
@@ -77,11 +73,10 @@ const buildInterval = 1.01;
 const filmArrival = 36.12;
 const filmSweep = 36.80;
 const formArrival = 38.04;
-const contactTravelDuration = 1850;
 const filmFrameShare = 1343 / 1900;
 const chapters = [
   ['home', 0], ['plans', 7.1], ['facades', facadesStop],
-  ['interiors', interiorTime(0)], ['wall-system', wallTitleStop],
+  ['interiors', interiorFirstStop], ['wall-system', wallTitleStop],
   ['how-we-build', buildStart], ['contact', 38.3]
 ];
 const END = 38.75;
@@ -110,6 +105,7 @@ const contactForm = $('#enquiry-form');
 const filmWindow = $('.contact-film-window');
 let width, height, portrait, unit, barHeight, interiorPitch, compactLogo, heroCopyHeight;
 let current = 0, raf = 0;
+let pageScroll, pageScrollFrame;
 let openingRendered = false;
 let interiorIndex = -1, buildIndex = -1;
 let focusOnArrival = null;
@@ -767,19 +763,16 @@ const firstPlan = 7.08;
 // Keep the first and last authored card centers after removing one variation.
 const cardPitch = 5.58 / (planCards.length - 1);
 const planSpan = (planCards.length - 1) * cardPitch;
-let planUnit, planHeight, widePlanSpacing, buildEntryStretch = 0;
+let planUnit, planHeight, widePlanSpacing;
 
-// Extend only the distance between plan centers. Models, chapter links and
-// controls still use the same authored poses, and cards move one pixel per pixel.
+// Plan spacing controls the gap, while the vertical cards travel at page speed.
 function scrollAt(time) {
-  const buildDistance = clamp(time - buildEntry, 0, buildStart - buildEntry) * buildEntryStretch * unit;
-  return time * unit + clamp(time - firstPlan, 0, planSpan) * (planUnit - unit) + buildDistance;
+  return time * unit + clamp(time - firstPlan, 0, planSpan) * (planUnit - unit);
 }
+
 function timeAt(y) {
   const planDistance = clamp(y - firstPlan * unit, 0, planSpan * planUnit);
-  const time = (y - planDistance) / unit + planDistance / planUnit;
-  const buildProgress = clamp((time - buildEntry) / (1 + buildEntryStretch), 0, buildStart - buildEntry);
-  return time - buildProgress * buildEntryStretch;
+  return (y - planDistance) / unit + planDistance / planUnit;
 }
 // Page scroll is the single timeline for the rail, the morph and the descent.
 // A horizontal gesture seeks along that same timeline without scrolling into another chapter.
@@ -787,13 +780,11 @@ const planGallery = {last:planCards.length - 1, time:index => firstPlan + index 
 const planPoses = orderedPlans.map(i => ({45:510,75:150,125:330})[catalog.plans[i].m2]);
 function planPosition(t) {
   const raw = clamp((t - firstPlan) / cardPitch,0,planGallery.last);
-  if (motion.matches) return Math.round(raw);
-  const index = Math.floor(raw);
-  return index + range(raw - index,.04,.96);
+  return motion.matches ? Math.round(raw) : raw;
 }
 function seekPlan(position) {
   const bounded = clamp(position,0,planGallery.last);
-  window.scrollTo({top:scrollAt(planGallery.time(bounded)),behavior:'instant'});
+  seekPage(scrollAt(planGallery.time(bounded)));
 }
 let planDrag = null;
 planTrack.addEventListener('pointerdown', event => {
@@ -808,7 +799,6 @@ planTrack.addEventListener('pointermove', event => {
     if (Math.abs(dy) > Math.abs(dx)) { planDrag = null; return; }
     planDrag.horizontal = true;
     planTrack.setPointerCapture(event.pointerId);
-    interruptScroll();
   }
   seekPlan(planDrag.start + dx / planStride);
 });
@@ -829,7 +819,6 @@ planTrack.addEventListener('wheel', event => {
   if (!horizontal && !event.shiftKey) return;
   const delta = (horizontal ? event.deltaX : event.deltaY) * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? width : 1);
   event.preventDefault();
-  interruptScroll();
   seekPlan((timeAt(scrollY) - firstPlan) / cardPitch + delta / planStride);
 }, {passive:false});
 planTrack.addEventListener('keydown', event => {
@@ -1209,12 +1198,9 @@ function interior(t) {
 const wallStart = 25.48;
 const wallRate = 215 / 3.9;
 const wallFirstFrame = wallHolds[0][0];
-const wallReadFrame = wallFirstFrame + 6;
-const wallReadSpan = .20;
-const wallSlideDuration = 1120;
 const wallStops = [];
-let wallEntranceFrame, wallFirstArrival, wallReadPoint, wallLastPose, wallFadeStart, wallEnd;
-function wallAuthoredFrameAt(t) {
+let wallEntranceFrame, wallFirstArrival, wallFadeStart, wallEnd;
+function wallFrameAt(t) {
   if (t < wallFirstArrival) {
     const progress = range(t, wallStart, wallFirstArrival);
     const ramp = .30;
@@ -1223,39 +1209,13 @@ function wallAuthoredFrameAt(t) {
     const fraction = distance / (1 - ramp);
     return wallEntranceFrame + (wallFirstFrame - wallEntranceFrame) * (progress <= .5 ? fraction : 1 - fraction);
   }
-  if (t < wallReadPoint) {
-    return wallFirstFrame + (wallReadFrame - wallFirstFrame) * ease(range(t, wallFirstArrival, wallReadPoint));
-  }
-  // Hold the first readable pose over a short scroll range without moving the page.
-  const resume = wallReadPoint + wallReadSpan;
-  const span = wallLastPose - resume;
-  const elapsed = clamp(t - resume, 0, span);
-  const remaining = span - elapsed;
-  const ramp = .12;
-  const start = 1 - range(elapsed, 0, ramp);
-  const end = 1 - range(remaining, 0, ramp);
-  const travel = elapsed - elapsed * start ** 2 + remaining * end ** 2;
-  return Math.min(216, wallReadFrame + travel * wallRate);
-}
-function wallTimeAtFrame(frame) {
-  let start = wallFirstArrival, end = wallLastPose;
-  // Convert the still in the authored animation to a stop on the page.
-  for (let i = 0; i < 18; i++) {
-    const middle = (start + end) / 2;
-    if (wallAuthoredFrameAt(middle) < frame) start = middle;
-    else end = middle;
-  }
-  return (start + end) / 2;
-}
-function wallFrameAt(t) {
   const next = wallStops.findIndex(stop => stop > t);
-  if (next <= 0) return wallAuthoredFrameAt(t);
+  if (next < 0) return wallHolds.at(-1)[0];
   const start = wallStops[next - 1], end = wallStops[next];
-  const [first, from] = wallHolds[next - 1];
+  // The repeated source frames look identical. Use the available scroll
+  // distance for the moving part between two readable poses.
+  const from = wallHolds[next - 1][1];
   const to = wallHolds[next][0];
-  if ((t - start) * unit < 1) return first;
-  if ((end - t) * unit < 1) return to;
-  // The source repeats each still. Spend the transition on the moving frames.
   return from + (to - from) * range(t, start, end);
 }
 const wallTextFields = wallCards.map(card => Array.from(card.querySelector('.wall-copy').children));
@@ -1283,7 +1243,7 @@ function wallSystem(t) {
   const titleEntry = interiorExitStart + .9 * (interiorEnd - interiorExitStart);
   title('wall-title', t, titleEntry, wallTitleStop - .015, wallTitleExitStart, wallTitleExitEnd);
   const folder = wallFolder;
-  if (t > 24.25 && t < wallStart) wall.set(folder, wallSample(wallEntranceFrame), wallSample(216), false);
+  if (t > (compactMedia ? interiorArrival : 24.25) && t < wallStart) wall.set(folder, wallSample(wallEntranceFrame), wallSample(216), false);
   if (t >= wallEnd && t < wallEnd+.45) wall.set(folder,wallSample(216),wallSample(216),false);
   if (!visible('wall', t >= wallStart && t < wallEnd)) {
     showWallCard(-1);
@@ -1498,15 +1458,13 @@ function measure() {
   // The first layer starts off-screen and rises 36 source pixels per authored
   // frame. Begin at the visible edge; desktop and portrait crop it differently.
   wallEntranceFrame = clamp(1.25 + (2555 - wallBottom) / 36, 1, wallFirstFrame - 1);
-  const firstHold = wallTitleExitEnd + overlapSpan;
-  wallFirstArrival = wallStart + (firstHold - wallStart) * .82;
-  // Spend the saved entrance time on the authored still so the later layers keep their cues.
-  wallReadPoint = firstHold + (wallReadFrame - wallFirstFrame) / wallRate;
-  wallLastPose = firstHold + (216 - wallFirstFrame) / wallRate + wallReadSpan;
-  wallHolds.forEach(([first, last], index) => {
-    wallStops[index] = wallTimeAtFrame((first + last) / 2);
+  wallFirstArrival = wallTitleExitEnd + overlapSpan + .34;
+  const layerCenter = ([first, last]) => (first + last) / 2;
+  const firstCenter = layerCenter(wallHolds[0]);
+  wallHolds.forEach((hold, index) => {
+    wallStops[index] = wallFirstArrival + (layerCenter(hold) - firstCenter) / wallRate;
   });
-  wallFadeStart = wallLastPose + .25;
+  wallFadeStart = wallStops.at(-1) + .36;
   wallEnd = wallFadeStart + .35;
   // The scene may be display:none on a direct link. Measure its actual card
   // template once per viewport size, outside the animation loop.
@@ -1516,36 +1474,80 @@ function measure() {
   planHeight = sample.getBoundingClientRect().height;
   sample.remove();
   widePlanSpacing = range(width / height, 1.15, 1.5);
-  // At the closest handoff the smaller of two visible fragments is 10%.
-  const widePitch = height + .8 * planHeight;
-  planUnit = usesPlanRail() ? unit * .82 : unit + widePlanSpacing * (widePitch / cardPitch - unit);
-  buildEntryStretch = .75;
+  // Side-by-side cards alternate columns, so only every second card needs clearance.
+  const minimumPlanPitch = (portrait ? planHeight : planHeight / 2) + barHeight;
+  const planPitch = usesPlanRail() ? height * (495 / 844) : Math.max(height * (478 / 900), minimumPlanPitch);
+  planUnit = planPitch / cardPitch;
   story.style.height = 'calc(' + scrollAt(END) + 'px + var(--stage-view,var(--view)))';
+  pageScroll?.resize();
   measureOpeningMotion();
   for (const [id, time] of chapters) document.getElementById(id).style.top = Math.round(scrollAt(time)) + 'px';
   if (previousTime !== null && previousTime <= END) {
-    window.scrollTo({top:scrollAt(previousTime), behavior:'instant'});
+    seekPage(scrollAt(previousTime));
   }
   schedule();
 }
-function interruptScroll() {
-  if (selectedSlide) cancelAnimationFrame(selectedSlide.frame);
+function cancelPageScroll() {
   selectedSlide = null;
   focusOnArrival = null;
+  if (pageScroll?.isSmooth) {
+    pageScroll.stop();
+    pageScroll.start();
+  }
 }
+
+function seekPage(y) {
+  cancelPageScroll();
+  if (pageScroll) pageScroll.scrollTo(y, {immediate:true});
+  else window.scrollTo({top:y, behavior:'instant'});
+}
+
+function setupPageScroll() {
+  cancelPageScroll();
+  cancelAnimationFrame(pageScrollFrame);
+  pageScroll?.destroy();
+  pageScroll = null;
+  if (motion.matches || typeof Lenis !== 'function') return;
+  pageScroll = new Lenis({
+    duration:wheelScrollDuration,
+    syncTouch:false,
+    prevent:node => node.matches('dialog, input, textarea, select, [contenteditable]'),
+    virtualScroll:({event, deltaX, deltaY}) => {
+      if (event.type !== 'wheel') return true;
+      if (loadingMedia || event.defaultPrevented || !event.cancelable ||
+          event.ctrlKey || event.metaKey || event.shiftKey || Math.abs(deltaX) > Math.abs(deltaY) ||
+          textRevealOverlay.open || menu.open || privacy.open) return false;
+      selectedSlide = null;
+      return true;
+    }
+  });
+  function advance(now) {
+    const smooth = pageScroll.isSmooth;
+    const before = smooth ? window.scrollY : null;
+    pageScroll.raf(now);
+    if (smooth && before !== window.scrollY) {
+      // Render at the new position in this frame, including the pinned cards.
+      if (raf) cancelAnimationFrame(raf);
+      render();
+    }
+    pageScrollFrame = requestAnimationFrame(advance);
+  }
+  pageScrollFrame = requestAnimationFrame(advance);
+}
+
 let chapterTransition = null;
 function endChapterTransition() {
   chapterTransition?.skipTransition();
   chapterTransition = null;
 }
 function landOnChapter(target) {
-  window.scrollTo({top:window.scrollY + target.getBoundingClientRect().top, behavior:'instant'});
+  seekPage(window.scrollY + target.getBoundingClientRect().top);
   focusOnArrival = target;
   render();
 }
 function visitChapter(target) {
   endChapterTransition();
-  resetGestures();
+  resetScrollInput();
   if (menu.open) {
     menuDestination = target;
     closeMenu();
@@ -1580,7 +1582,7 @@ const menuOffscreen = 'translateY(-100%) scaleY(0)';
 let menuMotion, menuDestination = null, menuClosing = false;
 menuButton.addEventListener('click', () => {
   if (menu.open) return;
-  resetGestures();
+  resetScrollInput();
   menu.showModal();
   menuButton.setAttribute('aria-expanded','true');
   if (!motion.matches && menu.animate) {
@@ -1632,190 +1634,55 @@ document.addEventListener('click', e => {
   e.preventDefault();
   visitChapter(target);
 });
-function interiorTime(index) { return index === 0 ? interiorFirstStop : interiorStart + index * interiorInterval + .06; }
+function interiorTime(index) {
+  return interiorFirstStop + (interiorExitStart - interiorFirstStop) * index / interiorLast;
+}
 function interiorPosition(t) {
-  // The first room has a shorter interval because it enters from the facade.
-  const position = t < interiorTime(1) ? range(t, interiorTime(0), interiorTime(1))
-    : clamp(1 + (t - interiorTime(1)) / interiorInterval, 1, interiorLast);
+  const position = interiorLast * range(t, interiorFirstStop, interiorExitStart);
   const nearest = Math.round(position);
   return motion.matches || Math.abs(position - nearest) * interiorPitch < 1 ? nearest : position;
 }
 const interiorGallery = {time:interiorTime, at:t => Math.round(interiorPosition(t)), last:interiorLast};
-const wallGallery = {time:index => wallStops[index]};
 const buildGallery = {time:buildTime, at:buildAt, last:buildLast};
-const interiorStops = Array.from({length:interiorLast + 1}, (_, index) => interiorTime(index));
 
-function animateToTime(time, duration, gallery = null, slide = null, curve = scrollEase) {
-  interruptScroll();
-  const from = window.scrollY;
-  const to = Math.round(scrollAt(time));
-  if (from === to || !duration || motion.matches) {
-    window.scrollTo({top:to,behavior:'instant'});
-    return;
-  }
-  const start = performance.now();
-  let lastY = from;
-  function advance(now) {
-    if (Math.abs(window.scrollY - lastY) > 1) {
-      return interruptScroll();
-    }
-    const progress = range(now, start, start + duration);
-    window.scrollTo({top:from + (to - from) * curve(progress),behavior:'instant'});
-    lastY = window.scrollY;
-    if (progress < 1) {
-      selectedSlide.frame = requestAnimationFrame(advance);
-    } else {
-      const {exitDelta} = selectedSlide;
-      selectedSlide = null;
-      if (exitDelta) {
-        const stop = nextReadingStop(lastY, exitDelta);
-        window.scrollTo({top:stop ? scrollAt(stop.time) : lastY + exitDelta, behavior:'instant'});
-      }
-    }
-  }
-  selectedSlide = {gallery,slide,direction:Math.sign(to - from),frame:requestAnimationFrame(advance)};
-}
 function selectGallery(gallery, index) {
-  resetGestures();
+  resetScrollInput();
   const slide = clamp(index, 0, gallery.last);
-  animateToTime(gallery.time(slide), referenceSlideDuration, gallery, slide, surfaceEase);
-}
-
-const readingGroups = [
-  interiorStops, [wallTitleStop], wallStops,
-  [...Array.from({length:buildLast + 1}, (_, index) => buildTime(index)), formArrival + .02]
-];
-
-function usesInstantReadingEntry(stop) {
-  return stop?.entry && (interiorStops.includes(stop.time) || wallStops.includes(stop.time));
-}
-
-// Outside a gallery, native input owns the page up to its actual boundary.
-// Within it, choose the next authored reading pose in the gesture direction.
-function nextReadingStop(y, delta, groups = readingGroups) {
-  for (const times of delta > 0 ? groups : groups.toReversed()) {
-    const first = Math.round(scrollAt(times[0])), last = Math.round(scrollAt(times.at(-1)));
-    if (y < first - 1) {
-      if (y + delta >= first) return {time:times[0], entry:true};
-    } else if (y > last + 1) {
-      if (y + delta <= last) return {time:times.at(-1), entry:true};
-    } else {
-      const target = delta > 0 ? times.find(t => Math.round(scrollAt(t)) > y + 1)
-        : times.findLast(t => Math.round(scrollAt(t)) < y - 1);
-      if (target != null) return {time:target, entry:false};
-    }
+  const target = Math.round(scrollAt(gallery.time(slide)));
+  if (!pageScroll || Math.abs(target - window.scrollY) < 1) {
+    seekPage(target);
+    return;
   }
-}
-function moveToReadingStop(time, touch = false) {
-  const distance = Math.abs(timeAt(window.scrollY) - time);
-  const entersBuild = time === buildStart && current < buildStart;
-  const entersContact = time > buildTime(buildLast);
-  const entersWallTitle = time === wallTitleStop;
-  const authoredDuration = entersContact ? contactTravelDuration : entersBuild || entersWallTitle
-    ? readingTravelDuration : clamp(distance * referenceSlideDuration, 120, referenceSlideDuration);
-  const duration = touch ? Math.min(authoredDuration, entersContact ? 900 : 520) : authoredDuration;
-  const curve = entersContact || entersWallTitle ? scrollEase : entersBuild ? readingTravelEase : surfaceEase;
-  const interiorSlide = interiorStops.indexOf(time);
-  const wallSlide = wallStops.indexOf(time);
-  if (interiorSlide >= 0) {
-    animateToTime(time, duration, interiorGallery, interiorSlide, curve);
-  } else if (wallSlide >= 0) {
-    const wallDuration = clamp(distance * wallSlideDuration, 180, wallSlideDuration);
-    animateToTime(time, touch ? Math.min(wallDuration, 650) : wallDuration, wallGallery, wallSlide, ease);
-  } else if (time >= buildStart && time <= buildTime(buildLast)) {
-    animateToTime(time, duration, buildGallery, Math.round((time - buildStart) / buildInterval), curve);
-  } else animateToTime(time, duration, null, null, curve);
-  if (selectedSlide) selectedSlide.readingTime = time;
-}
-function acceptsPageGesture(event) {
-  return !event.defaultPrevented && !document.querySelector('dialog[open]') &&
-    !event.target.closest?.('input,textarea,select,[contenteditable="true"]');
-}
-let wheelGesture = null, finger = null;
-const wheelStepThreshold = 16;
-const wheelQuietTime = 180;
-const fineWheelPause = 350;
-function resetGestures() {
-  wheelGesture = finger = null;
-  interruptScroll();
-}
-window.addEventListener('pointerdown', event => {
-  if (event.pointerType !== 'touch') resetGestures();
-}, {passive:true});
-window.addEventListener('popstate', resetGestures);
-motion.addEventListener('change', resetGestures);
-
-function readingOrigin(y, direction) {
-  if (selectedSlide?.direction !== direction) return y;
-  const {gallery, slide, readingTime} = selectedSlide;
-  const time = readingTime ?? (gallery === interiorGallery || gallery === buildGallery ? gallery.time(slide) : null);
-  return time == null ? y : Math.round(scrollAt(time));
+  const selection = selectedSlide = {gallery, slide};
+  pageScroll.scrollTo(target, {
+    duration:gallerySelectDuration,
+    easing:surfaceEase,
+    onComplete:() => { if (selectedSlide === selection) selectedSlide = null; }
+  });
 }
 
-function finishReadingInput(stop, origin, delta, touch = false) {
-  if (stop?.entry && usesInstantReadingEntry(stop)) animateToTime(stop.time, 0);
-  else if (stop) moveToReadingStop(stop.time, touch);
-  else if (selectedSlide && origin !== window.scrollY) selectedSlide.exitDelta ??= delta;
-}
-
-function startsAnotherWheelStep(gesture, gap, magnitude, now) {
-  if (gap > wheelQuietTime) return true;
-  if (!gesture.handled) return false;
-  // A new stroke can overtake the decaying tail. A small rebound or the
-  // continuing slowdown of one stroke must never advance another frame.
-  const rebounds = magnitude >= Math.max(18, gesture.last * 2, Math.min(36, gesture.peak * .25));
-  if (gesture.last <= gesture.peak * .45 && rebounds && gap >= 24) return true;
-  // A stream of strong, steady detents may traverse a gallery. Advance at
-  // reading stops, even while the wheel is being spun continuously.
-  return now - gesture.start >= 420 && gesture.steady >= 4 &&
-    magnitude >= 48 && magnitude >= gesture.last * .96;
-}
-
-window.addEventListener('wheel', event => {
-  if (touchViewport.matches) { resetGestures(); return; }
-  if (!acceptsPageGesture(event) || !event.cancelable || event.ctrlKey || event.metaKey ||
-      event.shiftKey || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+let finger = null;
+function resetScrollInput() {
   finger = null;
-  const mode = event.deltaMode;
-  const delta = event.deltaY * (mode === 1 ? 16 : mode === 2 ? height : 1);
-  const direction = Math.sign(delta), magnitude = Math.abs(delta), now = event.timeStamp;
-  const previous = wheelGesture;
-  const gap = now - (previous?.time ?? -Infinity);
-  const sameDirection = previous?.direction === direction;
-  if (!sameDirection || startsAnotherWheelStep(previous, gap, magnitude, now)) {
-    const keepFineInput = sameDirection && !previous.handled && gap <= fineWheelPause;
-    wheelGesture = {direction, start:now, time:now, distance:keepFineInput ? previous.distance : 0,
-      last:magnitude, peak:magnitude, steady:0, handled:false};
-  }
-  const gesture = wheelGesture;
-  gesture.steady = magnitude >= 48 && magnitude >= gesture.last * .96 ? gesture.steady + 1 : 0;
-  gesture.last = magnitude;
-  gesture.peak = Math.max(gesture.peak, magnitude);
-  gesture.time = now;
-  if (gesture.handled) {
-    event.preventDefault();
-    return;
-  }
-  const y = window.scrollY;
-  const origin = readingOrigin(y, direction);
-  const stop = nextReadingStop(origin, delta);
-  if (!stop && origin === y) {
-    gesture.distance = 0;
-    interruptScroll();
-    return;
-  }
+  cancelPageScroll();
+}
 
-  event.preventDefault();
-  gesture.distance += magnitude;
-  const threshold = selectedSlide?.direction === -direction ? 12 : wheelStepThreshold;
-  if (!stop?.entry && gesture.distance < threshold &&
-      (!stop || Math.abs(scrollAt(stop.time) - y) > gesture.distance)) return;
-  gesture.handled = true;
-  finishReadingInput(stop, origin, direction * gesture.distance);
-}, {passive:false});
+window.addEventListener('pointerdown', event => {
+  if (event.pointerType !== 'touch') resetScrollInput();
+}, {passive:true});
+window.addEventListener('popstate', resetScrollInput);
+motion.addEventListener('change', () => {
+  resetScrollInput();
+  setupPageScroll();
+});
+window.addEventListener('keydown', event => {
+  if (!event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey &&
+      !event.target.closest?.('input, textarea, select, [contenteditable]') &&
+      ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) resetScrollInput();
+});
 
 const touchStepThreshold = 12;
-function handleReadingTouch(event) {
+function handleInteriorSwipe(event) {
   if (!finger || event.touches.length > 1) return;
   const releasing = event.type === 'touchend';
   const touch = releasing ? event.changedTouches[0] : event.touches[0];
@@ -1824,58 +1691,33 @@ function handleReadingTouch(event) {
   if (!finger.axis && Math.max(Math.abs(dx), Math.abs(dy)) >= 5) {
     finger.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
   }
-  if (!finger.axis) return;
-  if (finger.axis === 'x') {
-    if (!finger.dragged && Math.abs(dx) < touchStepThreshold) return;
-    if (!finger.dragged) {
-      interruptScroll();
-      finger.dragged = true;
-    }
-    if (releasing) {
-      const direction = Math.abs(dx) >= touchStepThreshold ? Math.sign(dx) : 0;
-      const target = direction > 0 ? Math.floor(finger.position) + 1
-        : direction < 0 ? Math.ceil(finger.position) - 1 : Math.round(finger.position);
-      moveToReadingStop(interiorTime(clamp(target, 0, interiorLast)), true);
-    } else {
-      const position = clamp(finger.position + clamp(dx / interiorPitch, -1, 1), 0, interiorLast);
-      const index = Math.floor(position), mix = position - index;
-      const t = interiorTime(index) + mix * (interiorTime(Math.min(index + 1, interiorLast)) - interiorTime(index));
-      window.scrollTo({top:scrollAt(t), behavior:'instant'});
-    }
-    return;
+  if (finger.axis !== 'x' || (!finger.dragged && Math.abs(dx) < touchStepThreshold)) return;
+  finger.dragged = true;
+  if (releasing) {
+    const direction = Math.abs(dx) >= touchStepThreshold ? Math.sign(dx) : 0;
+    const target = direction > 0 ? Math.floor(finger.position) + 1
+      : direction < 0 ? Math.ceil(finger.position) - 1 : Math.round(finger.position);
+    selectGallery(interiorGallery, target);
+  } else {
+    const position = clamp(finger.position + clamp(dx / interiorPitch, -1, 1), 0, interiorLast);
+    seekPage(scrollAt(interiorTime(position)));
   }
 }
-// Vertical drags and momentum always belong to the browser. Only a sideways
-// drag over the interior gallery moves its rail along the shared timeline.
+
+// Only a sideways drag over an interior photo seeks along the page.
 window.addEventListener('touchstart', event => {
-  resetGestures();
-  if (event.touches.length !== 1 || !acceptsPageGesture(event)) return;
-  const t = timeAt(window.scrollY);
-  if (t < interiorEntry || t > interiorEnd) return;
+  resetScrollInput();
+  if (event.touches.length !== 1 || !event.target.closest?.('.viewport') ||
+      event.target.closest?.('a, button, [role="slider"]') || !scenes.interiors.classList.contains('live')) return;
   const touch = event.touches[0];
-  finger = {x:touch.clientX, y:touch.clientY, position:interiorPosition(t)};
+  finger = {x:touch.clientX, y:touch.clientY, position:interiorPosition(timeAt(window.scrollY))};
 }, {passive:true});
-window.addEventListener('touchmove', handleReadingTouch, {passive:true});
+window.addEventListener('touchmove', handleInteriorSwipe, {passive:true});
 window.addEventListener('touchend', event => {
-  if (finger) handleReadingTouch(event);
+  handleInteriorSwipe(event);
   finger = null;
 }, {passive:true});
 window.addEventListener('touchcancel', () => { finger = null; }, {passive:true});
-window.addEventListener('keydown', event => {
-  if (!acceptsPageGesture(event) || event.altKey || event.ctrlKey || event.metaKey ||
-      event.target.closest?.('button,a,[role="slider"]')) return;
-  const direction = {ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1,' ':event.shiftKey ? -1 : 1}[event.key];
-  wheelGesture = finger = null;
-  if (!direction) { interruptScroll(); return; }
-  const stride = event.key.startsWith('Arrow') ? 40 : height * .9;
-  const y = window.scrollY;
-  const stop = nextReadingStop(readingOrigin(y, direction), direction * stride);
-  if (stop == null) { interruptScroll(); return; }
-  event.preventDefault();
-  if (event.repeat) return;
-  if (usesInstantReadingEntry(stop)) animateToTime(stop.time, 0);
-  else moveToReadingStop(stop.time);
-});
 
 interiorSlider.addEventListener('click', event => {
   const {top, height: trackHeight} = interiorSlider.getBoundingClientRect();
@@ -1902,7 +1744,7 @@ for (const [slider, gallery] of [[interiorSlider, interiorGallery], [buildSlider
   });
 }
 const privacy = $('#privacy');
-$('#privacy-button').onclick = () => privacy.showModal();
+$('#privacy-button').onclick = () => { resetScrollInput(); privacy.showModal(); };
 privacy.querySelector('button').onclick = () => privacy.close();
 const formStatus = $('#form-status');
 const enquiryDraft = $('#enquiry-draft');
@@ -2067,7 +1909,7 @@ function settleStageHeight() {
   }, 180);
 }
 window.addEventListener('scroll', () => {
-  schedule();
+  if (!pageScroll?.isSmooth) schedule();
   if (stageResizeTimer) settleStageHeight();
 }, {passive:true});
 window.visualViewport?.addEventListener('resize', () => {
@@ -2079,7 +1921,7 @@ window.addEventListener('resize', () => {
     return;
   }
   if (width !== viewport.clientWidth || height !== parseFloat(getComputedStyle(viewport).minHeight)) {
-    resetGestures();
+    resetScrollInput();
     measure();
   } else if (visibleStageHeight !== viewport.clientHeight) {
     measurePanorama();
@@ -2100,6 +1942,7 @@ observeSmoothCorners(all('#enquiry-form input, #enquiry-form textarea, #enquiry-
 measure();
 document.fonts.ready.then(measure);
 if (location.hash && document.getElementById(location.hash.slice(1))) document.getElementById(location.hash.slice(1)).scrollIntoView({behavior:'instant'});
+setupPageScroll();
 render();
 
 function prepareOnlineMedia(t) {
@@ -2128,7 +1971,10 @@ function prepareOnlineMedia(t) {
       facadePose.loadOnline();
     }
   }
-  if (!wall.loading && t > 20.2 && t < 31.5) wall.loadOnline();
+  if (!wall.loading && t > (compactMedia ? interiorArrival : 20.2) && t < 31.5) {
+    // Give the phone's first visible layer priority over the rest of its movie.
+    wall.loadOnline({rangeOnly:compactMedia});
+  }
 }
 
 function pageMedia() {
