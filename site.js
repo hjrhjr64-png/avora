@@ -1474,9 +1474,8 @@ function measure() {
   planHeight = sample.getBoundingClientRect().height;
   sample.remove();
   widePlanSpacing = range(width / height, 1.15, 1.5);
-  // Side-by-side cards alternate columns, so only every second card needs clearance.
-  const minimumPlanPitch = (portrait ? planHeight : planHeight / 2) + barHeight;
-  const planPitch = usesPlanRail() ? height * (495 / 844) : Math.max(height * (478 / 900), minimumPlanPitch);
+  // Keep a vertical gap between consecutive cards, including those in opposite columns.
+  const planPitch = usesPlanRail() ? height * (495 / 844) : planHeight + height * .12;
   planUnit = planPitch / cardPitch;
   story.style.height = 'calc(' + scrollAt(END) + 'px + var(--stage-view,var(--view)))';
   pageScroll?.resize();
