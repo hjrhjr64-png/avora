@@ -97,6 +97,7 @@ const interiorTrack = $('#interior-images');
 const interiorCard = $('.interior-card');
 const buildCard = $('.process-card');
 const buildFrame = $('#build-images');
+const buildTrack = $('#build-track');
 const buildSlider = $('#build-slider');
 const buildCount = $('#build-count');
 const buildCopy = $('#build-copy');
@@ -331,7 +332,8 @@ function makeSlides(group, parent, name) {
 }
 const interiors = makeSlides(catalog.interiors, interiorTrack, 'interior');
 interiors.forEach((image, index) => { image.style.left = 'calc(' + index + ' * var(--interior-pitch))'; });
-const stages = makeSlides(catalog.stages, buildFrame, 'stage');
+const stages = makeSlides(catalog.stages, buildTrack, 'stage');
+stages.forEach((img, i) => img.style.setProperty('--stage-offset', i * 100 + '%'));
 const buildLast = stages.length - 1;
 const buildInterval = (36 - buildStart) / buildLast;
 const buildTime = index => buildStart + index * buildInterval;
@@ -1076,16 +1078,6 @@ function facade(t) {
   heading.style.transform = 'none';
   heading.style.opacity = copyOpacity * (1 - .72 * step(t, interiorEntry, interiorArrival));
 }
-function slideImages(images, position, vertical) {
-  images.forEach((img, i) => {
-    const delta = i - position;
-    if (Math.abs(delta) < 1.8) loadImage(img);
-    const live = Math.abs(delta) < 1.01;
-    img.style.visibility = live ? 'visible' : 'hidden';
-    if (!live) return;
-    img.style.transform = (vertical ? 'translateY(' : 'translateX(') + delta * 100 + '%)';
-  });
-}
 const playingCardLines = new Map();
 
 function measureCardLines(node) {
@@ -1167,10 +1159,12 @@ function interior(t) {
   const exit = referenceTravel(t, interiorExitStart, interiorEnd);
   scenes.interiors.style.transform = 'translate3d(' + (1 - enter) * 100 + '%, ' + -exit * 101 + '%, 0)';
   scenes.interiors.style.opacity = motion.matches ? 1 : referenceFade(exit);
-  const position = interiorPosition(t);
+  const dragging = finger?.axis === 'x' && finger.dragged;
+  const position = dragging ? interiorPosition(t) : interiorGallery.at(t);
+  interiorTrack.classList.toggle('dragging', Boolean(dragging));
   if (position !== interiorVisualPosition) {
     interiorVisualPosition = position;
-    interiorTrack.style.transform = 'translateX(' + (-position * interiorPitch) + 'px)';
+    interiorTrack.style.transform = 'translate3d(' + (-position * interiorPitch) + 'px,0,0)';
   }
   const i = Math.round(position);
   const changed = i !== interiorIndex;
@@ -1275,21 +1269,20 @@ function construction(t) {
   const adapted = adaptiveLayout.matches;
   const entering = portrait ? t < filmSweep : filmPosition < filmFrameShare;
   if (visible('construction', t >= buildEntry && t < (adapted ? formArrival : 37.95))) {
-    // The first gallery stop is rounded to a scroll pixel.
-    const photoParked = Math.round(scrollAt(t)) >= slideY(buildGallery, 0);
-    const entrance = photoParked ? 1 : reveal(t, buildEntry, buildStart);
-    const showCard = photoParked && !textRevealOverlay.open;
+    const travel = reveal(t, buildEntry, buildStart);
+    // Let the paired panels travel a little farther in the middle and approach
+    // the final position more gently. Both endpoints stay exactly in place.
+    const entrance = travel + .25 * travel * travel * (1 - travel);
     buildFrame.hidden = !adapted && !entering;
     scenes.construction.style.transform = adapted
       ? 'translate3d(' + (-100 * filmPosition) + '%, ' + (-100 * (1 - entrance)) + '%, 0)'
       : 'translate3d(' + (100 * (1 - entrance)) + '%, 0, 0)';
-    buildCard.classList.toggle('is-revealed', showCard);
-    buildCard.inert = !showCard || t > filmArrival;
-    const position = buildPosition(t);
-    slideImages(stages, position, adapted);
-    const i = Math.round(position);
+    buildCard.inert = entrance < .98 || t > filmArrival;
+    const i = buildAt(t);
     const changed = i !== buildIndex;
     if (changed) {
+      buildTrack.style.setProperty('--track-offset', -i * 100 + '%');
+      for (const image of stages.slice(Math.max(0, i - 1), i + 2)) loadImage(image);
       const {name, kicker, body} = catalog.stages[i];
       buildCopy.children[0].textContent = kicker;
       buildCopy.children[1].textContent = name;
@@ -1300,15 +1293,12 @@ function construction(t) {
       stages.forEach((image, index) => image.setAttribute('aria-hidden', String(index !== i)));
       buildIndex = i;
     }
-    const copyVisible = !textRevealOverlay.open && (showCard || buildCopyShown) && t < formArrival;
+    const copyVisible = !textRevealOverlay.open && entrance >= .35 && t < formArrival;
     buildCopy.style.visibility = copyVisible ? 'visible' : 'hidden';
     if (copyVisible && (changed || !buildCopyShown)) revealCardLines(buildTextFields);
     buildCopyShown = copyVisible;
-    buildSlider.style.setProperty('--build-progress', position / buildLast);
-  } else {
-    buildCard.classList.remove('is-revealed');
-    buildCopyShown = false;
-  }
+    buildSlider.style.setProperty('--build-progress', i / buildLast);
+  } else buildCopyShown = false;
   if (t > 29.9 && !forestFilm.poster) forestFilm.poster = contactPoster;
   if (t > 34 && !motion.matches) prepareContactFilm();
   const enquiry = visible('enquiry', t >= filmArrival);
@@ -1676,9 +1666,7 @@ function galleryStep(y, delta) {
     if (y < first && y + delta >= first) return {gallery, slide:0};
     if (y > last && y + delta <= last) return {gallery, slide:gallery.last};
     if (y < first || y > last) continue;
-    const index = gallery.at(timeAt(y));
-    const offset = (slideY(gallery, index) - y) * direction;
-    const slide = offset > 1 ? index : index + direction;
+    const slide = gallery.at(timeAt(y)) + direction;
     if (slide >= 0 && slide <= gallery.last) return {gallery, slide};
   }
   return null;
@@ -1688,8 +1676,13 @@ function selectGallery(gallery, index) {
   resetScrollInput();
   const slide = clamp(index, 0, gallery.last);
   const target = slideY(gallery, slide);
-  if (!pageScroll || Math.abs(target - window.scrollY) < 1) {
+  // Park the page at the requested stop. The photo track finishes its own
+  // transition even if native scrolling, a tap or another gesture intervenes.
+  const inGallery = scrollGalleries.includes(gallery) &&
+    scrollY >= slideY(gallery, 0) && scrollY <= slideY(gallery, gallery.last);
+  if (inGallery || !pageScroll || Math.abs(target - window.scrollY) < 1) {
     seekPage(target);
+    schedule();
     return;
   }
   const selection = selectedSlide = {gallery, slide};
@@ -1718,8 +1711,10 @@ window.addEventListener('wheel', event => {
   const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1);
   const now = performance.now(), strength = Math.abs(delta);
   if (wheelStroke && now - wheelStroke.last < 160 && Math.sign(delta) === wheelStroke.direction) {
-    const sustained = now - wheelStroke.start > slideTransitionDuration * 1000 &&
-      strength >= 12 && strength >= wheelStroke.strength;
+    // A steady, light gesture should advance again. A decaying inertia tail
+    // loses its accumulated distance whenever its strength drops.
+    wheelStroke.travel = strength < wheelStroke.strength ? 0 : wheelStroke.travel + strength;
+    const sustained = now - wheelStroke.start > slideTransitionDuration * 1000 && wheelStroke.travel >= 32;
     wheelStroke.last = now;
     wheelStroke.strength = strength;
     if (!sustained) { event.preventDefault(); return; }
@@ -1730,7 +1725,7 @@ window.addEventListener('wheel', event => {
   if (!next) return;
   event.preventDefault();
   selectGallery(next.gallery, next.slide);
-  wheelStroke = {start:now, last:now, strength, direction:Math.sign(delta)};
+  wheelStroke = {start:now, last:now, strength, travel:0, direction:Math.sign(delta)};
 }, {passive:false});
 
 // Embedded browsers need not emit scrollend after an interrupted or restored scroll.
@@ -1813,6 +1808,10 @@ function handleGallerySwipe(event) {
   }
   if (!finger.interior || finger.axis !== 'x' || (!finger.dragged && Math.abs(dx) < touchStepThreshold)) return;
   if (event.cancelable) event.preventDefault();
+  if (!finger.dragged) {
+    const transform = getComputedStyle(interiorTrack).transform;
+    finger.position = transform === 'none' ? 0 : clamp(-new DOMMatrixReadOnly(transform).m41 / interiorPitch, 0, interiorLast);
+  }
   finger.dragged = true;
   if (releasing) {
     const direction = Math.abs(dx) >= touchStepThreshold ? Math.sign(dx) : 0;
@@ -1841,6 +1840,7 @@ viewport.addEventListener('touchmove', handleGallerySwipe, {passive:false});
 viewport.addEventListener('touchend', handleGallerySwipe, {passive:false});
 function releaseGalleryTouch() {
   finger = null;
+  schedule();
   queueGallerySettle();
 }
 window.addEventListener('touchend', releaseGalleryTouch, {passive:true});

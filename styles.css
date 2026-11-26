@@ -206,12 +206,7 @@ h1,h2,.email,.menu-title{font-size:var(--display);letter-spacing:-.04em;line-hei
 .process-card{
   left:var(--build-gap);width:var(--build-card);background:var(--card);display:flex;flex-direction:column;
   justify-content:space-between;padding:calc(70 * var(--build-y)) calc(50 * var(--build-u));
-  --card-from-x:calc(100% + var(--build-gap));--card-from-y:0px;
-  opacity:0;transform:translate3d(var(--card-from-x),var(--card-from-y),0);
-  transition:transform .9s cubic-bezier(.42,0,.58,1),opacity .45s ease;
 }
-.process-card.is-revealed{opacity:1;transform:translate3d(0,0,0)}
-.construction:not(.live) .process-card{transition:none}
 #build-copy{padding-top:calc(10 * var(--build-u))}
 .process-kicker,#build-count{font:500 calc(14 * var(--build-u))/1 'Geist Mono',monospace;letter-spacing:-.04em}
 .process-kicker{opacity:.5;margin-bottom:calc(40 * var(--build-u))}
@@ -563,7 +558,18 @@ dialog::backdrop{background:#17191866}
 @media(max-width:600px){.hero-copy h1{max-width:100%}.hero-copy h1>span:not(.reveal-word){display:block}}
 /* The fixed glass caption remains in place as the photographs move behind it. */
 .interior-frame{position:absolute;inset:var(--interior-gap)}
-#interior-images{position:absolute;inset:0}
+#interior-images,#build-track{position:absolute;inset:0}
+#build-track{transform:translate3d(var(--track-offset,0%),0,0)}
+#build-track .slide-image{left:var(--stage-offset)}
+@media(max-width:1024px) and (orientation:portrait){
+  #build-track{transform:translate3d(0,var(--track-offset,0%),0)}
+  #build-track .slide-image{left:0;top:var(--stage-offset)}
+}
+@media(prefers-reduced-motion:no-preference){
+  .live #interior-images:not(.dragging),.live #build-track{
+    transition:transform 1.05s cubic-bezier(.333333,0,.666667,1);
+  }
+}
 #interior-images .slide-image{border-radius:var(--radius)}
 .interior-card{
   --u:clamp(.67px,.052083333vw,1.2px);
@@ -649,7 +655,7 @@ dialog::backdrop{background:#17191866}
     padding:calc(40 * var(--u)) calc(50 * var(--u));border-radius:calc(70 * var(--u));
   }
   #interior-slider .interior-rail{width:1px}
-  .process-card{--card-from-x:0px;--card-from-y:calc(-100% - var(--build-gap));top:auto;bottom:var(--build-vgap)}
+  .process-card{top:auto;bottom:var(--build-vgap)}
   .process-frame{top:var(--build-vgap);bottom:calc(390 * var(--build-y))}
   .contact-film-window{
     top:var(--build-vgap);height:calc((794 - 358 * var(--film-sweep,0)) * var(--build-y));transform:none;
@@ -871,11 +877,11 @@ dialog::backdrop{background:#17191866}
 
 @media (min-width:601px) and (max-width:1024px) and (orientation:portrait){
   #build-images .slide-image{object-position:var(--stage-focus)}
-  #build-images > :nth-child(1){--stage-focus:center 68%}
-  #build-images > :nth-child(2){--stage-focus:0% center}
-  #build-images > :nth-child(3){--stage-focus:34% center}
-  #build-images > :nth-child(4){--stage-focus:100% center}
-  #build-images > :nth-child(5){--stage-focus:100% center}
+  #build-track > :nth-child(1){--stage-focus:center 68%}
+  #build-track > :nth-child(2){--stage-focus:0% center}
+  #build-track > :nth-child(3){--stage-focus:34% center}
+  #build-track > :nth-child(4){--stage-focus:100% center}
+  #build-track > :nth-child(5){--stage-focus:100% center}
 }
 
 @media (max-width:600px) and (orientation:portrait){
@@ -883,11 +889,11 @@ dialog::backdrop{background:#17191866}
     transform:translateX(calc(12 * var(--wall-u))) scale(1.21);
   }
   #build-images .slide-image{object-position:var(--stage-focus,50%) center}
-  #build-images>:nth-child(1){--stage-focus:42%}
-  #build-images>:nth-child(2){--stage-focus:0%}
-  #build-images>:nth-child(3){--stage-focus:32%}
-  #build-images>:nth-child(4){--stage-focus:100%}
-  #build-images>:nth-child(5){--stage-focus:99%}
+  #build-track>:nth-child(1){--stage-focus:42%}
+  #build-track>:nth-child(2){--stage-focus:0%}
+  #build-track>:nth-child(3){--stage-focus:32%}
+  #build-track>:nth-child(4){--stage-focus:100%}
+  #build-track>:nth-child(5){--stage-focus:99%}
 }
 @media (any-pointer:coarse){
   /* Clip the artwork without creating an extra scroll container for a swipe. */
