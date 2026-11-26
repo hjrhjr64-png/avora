@@ -943,9 +943,6 @@ dialog::backdrop{background:#17191866}
 }
 .enquiry-close img{width:24px;height:24px}
 .enquiry-close:focus-visible{outline-color:white;outline-offset:-3px}
-@media(min-width:1025px), (orientation:landscape) and (pointer:fine){
-  .enquiry-close{place-items:start end;padding:4px}
-}
 @media(max-width:1024px) and (orientation:landscape) and (pointer:coarse){
   #enquiry-dialog{width:94vw;height:92dvh}
   #enquiry-dialog .enquiry{--view:max(490px,100cqh);--build-u:calc(100cqw / 1920)}
@@ -963,4 +960,18 @@ dialog::backdrop{background:#17191866}
 @media(min-width:1025px), (orientation:landscape) and (pointer:fine), (max-width:600px) and (orientation:portrait){
   .enquiry-close img{width:20px;height:20px;filter:drop-shadow(0 1px 2px #202525)}
   body:has(#enquiry-dialog[open]) :is(.bar,.menu-top) [aria-controls="enquiry-dialog"]{visibility:hidden}
+}
+@media(min-width:1025px), (orientation:landscape) and (pointer:fine){
+  #enquiry-dialog .enquiry-dialog-content{overflow:clip}
+  #enquiry-dialog .enquiry{--view:100cqh;height:100%}
+  .enquiry-close{
+    --close-inset:max(4px,.274vw);
+    --close-target:max(44px,2.2vw);
+    right:max(var(--close-inset),env(safe-area-inset-right,0px));padding:var(--close-inset);
+    width:var(--close-target);height:var(--close-target);place-items:start end;
+  }
+  .enquiry-close img{
+    width:max(20px,1.37vw);height:auto;
+    filter:brightness(0) invert(1) drop-shadow(0 1px 2px #202525);
+  }
 }
