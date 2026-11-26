@@ -917,8 +917,10 @@ dialog::backdrop{background:#17191866}
 #enquiry-dialog::backdrop{background:rgb(23 25 24 / .38)}
 .enquiry-dialog-content{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain}
 #enquiry-dialog .enquiry{
-  --view:max(490px,100cqh);--build-u:calc(100cqw / 1920);
   position:relative;inset:auto;height:var(--view);width:100%;
+}
+@media(min-width:1025px), (orientation:landscape){
+  #enquiry-dialog .enquiry{--view:max(490px,100cqh);--build-u:calc(100cqw / 1920)}
 }
 .enquiry-close{
   position:absolute;z-index:2;top:clamp(14px,2.5cqh,32px);right:clamp(16px,1.9cqw,34px);
@@ -927,18 +929,22 @@ dialog::backdrop{background:#17191866}
 }
 .enquiry-close img{width:24px;height:24px}
 .enquiry-close:focus-visible{outline-color:white;outline-offset:-3px}
-@media(max-aspect-ratio:4/5), (max-width:1024px) and (orientation:portrait){
+@media(min-width:1025px) and (max-aspect-ratio:4/5){
   #enquiry-dialog{width:96vw;height:94dvh}
   #enquiry-dialog .enquiry{--view:max(700px,100cqh);--build-u:calc(100cqw / 768)}
 }
 @media(max-width:1024px) and (orientation:portrait){
-  #enquiry-dialog{
-    --dialog-inset:clamp(16px,3dvh,40px);
-    width:calc(100% - 2 * var(--dialog-inset));height:calc(100dvh - 2 * var(--dialog-inset));
+  #enquiry-dialog{width:100%;height:100dvh}
+  #enquiry-dialog .enquiry{height:max(100%,var(--view))}
+  #enquiry-dialog .contact-film{pointer-events:auto}
+  #enquiry-dialog .enquiry-close{
+    top:clamp(8px,2vw,16px);right:clamp(14px,3vw,24px);background:transparent;
   }
-  #enquiry-dialog #enquiry-form{width:var(--build-card)}
-  #enquiry-dialog .enquiry-close{top:-12px;right:-12px}
 }
-@media(max-width:600px) and (orientation:portrait){
-  #enquiry-dialog .enquiry{--view:max(540px,100cqh);--build-u:calc(100cqw / 390)}
+@media(min-width:601px) and (max-width:1024px) and (orientation:portrait){
+  #enquiry-dialog #enquiry-form{top:var(--build-gap);bottom:auto}
+  #enquiry-dialog .contact-film-window{
+    top:calc(var(--form-height) + 2 * var(--build-gap));bottom:var(--build-gap);
+    width:calc(738 * var(--build-u));
+  }
 }

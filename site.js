@@ -1882,9 +1882,20 @@ for (const [slider, gallery] of [[interiorSlider, interiorGallery], [buildSlider
 const enquiryHome = document.createComment('Contact section');
 scenes.enquiry.before(enquiryHome);
 const enquiryDialogContent = enquiryDialog.querySelector('.enquiry-dialog-content');
+const enquiryClose = enquiryDialog.querySelector('.enquiry-close');
 let enquiryOpener;
+function placeEnquiryClose() {
+  const host = adaptiveLayout.matches ? contactForm : enquiryDialog;
+  if (enquiryClose.parentElement === host) return;
+  const hadFocus = document.activeElement === enquiryClose;
+  host.prepend(enquiryClose);
+  if (hadFocus) enquiryClose.focus({preventScroll:true});
+}
+adaptiveLayout.addEventListener('change', () => {
+  if (enquiryDialog.open) placeEnquiryClose();
+});
 for (const button of all('[aria-controls="enquiry-dialog"]')) {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', event => {
     if (enquiryDialog.open) return;
     resetScrollInput();
     enquiryOpener = button;
@@ -1892,10 +1903,16 @@ for (const button of all('[aria-controls="enquiry-dialog"]')) {
     enquiryDialogContent.scrollTop = 0;
     enquiryDialog.showModal();
     construction(current);
+    placeEnquiryClose();
+    if (adaptiveLayout.matches && event.detail > 0) enquiryDialog.focus({preventScroll:true});
   });
 }
-enquiryDialog.querySelector('.enquiry-close').addEventListener('click', () => enquiryDialog.close());
+enquiryClose.addEventListener('click', () => enquiryDialog.close());
 enquiryDialog.addEventListener('click', event => {
+  if (adaptiveLayout.matches && event.target === enquiryDialogContent) {
+    enquiryDialog.close();
+    return;
+  }
   if (event.target !== enquiryDialog) return;
   const rect = enquiryDialog.getBoundingClientRect();
   if (event.clientX < rect.left || event.clientX > rect.right ||
@@ -1903,6 +1920,7 @@ enquiryDialog.addEventListener('click', event => {
 });
 enquiryDialog.addEventListener('close', () => {
   if (enquiryDialog.open) return;
+  enquiryDialog.prepend(enquiryClose);
   enquiryHome.after(scenes.enquiry);
   construction(timeAt(scrollY));
   enquiryOpener?.focus({preventScroll:true});
