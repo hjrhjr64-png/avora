@@ -1577,8 +1577,8 @@ window.addEventListener('popstate', () => {
   if (target?.classList.contains('anchor')) requestAnimationFrame(() => landOnChapter(target));
 });
 const menuButton = $('#menu-button');
-const menuOffscreen = 'translateY(100dvh)';
-const menuEnterDuration = 850;
+const menuOffscreen = 'translateY(-100%)';
+const menuEnterDuration = 700;
 const menuItems = [...menu.querySelectorAll('.numbered a, .menu-bottom')];
 let menuItemMotions = [];
 let menuMotion, menuDestination = null, menuClosing = false;
@@ -1598,7 +1598,7 @@ menuButton.addEventListener('click', () => {
   menuItemMotions = menuItems.map((item, index) => item.animate([
     {opacity:0, transform:'translateY(8px)'},
     {opacity:1, transform:'translateY(0)'}
-  ], {duration:360, delay:menuEnterDuration + index * 125, easing:'ease-out', fill:'backwards'}));
+  ], {duration:300, delay:menuEnterDuration + index * 100, easing:'ease-out', fill:'backwards'}));
 });
 function closeMenu() {
   if (!menu.open || menuClosing) return;
@@ -1611,7 +1611,7 @@ function closeMenu() {
   });
   menuMotion?.cancel();
   menuMotion = menu.animate([{transform:from === 'none' ? 'translateY(0)' : from},
-    {transform:menuOffscreen}], {duration:700, easing:'cubic-bezier(.45,0,.75,.5)', fill:'forwards'});
+    {transform:menuOffscreen}], {duration:580, easing:'cubic-bezier(.45,0,.75,.5)', fill:'forwards'});
   menuMotion.finished.then(() => menu.close(), () => {});
 }
 $('#close-menu').addEventListener('click', closeMenu);
