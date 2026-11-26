@@ -205,6 +205,7 @@ h1,h2,.email,.menu-title{font-size:var(--display);letter-spacing:-.04em;line-hei
 .process-card,.process-frame,.contact-film,#enquiry-form{top:var(--build-vgap);bottom:var(--build-vgap)}
 .process-card{
   left:var(--build-gap);width:var(--build-card);background:var(--card);display:flex;flex-direction:column;
+  transform:translateX(calc((100% + var(--build-gap)) * var(--card-overlap,0)));
   justify-content:space-between;padding:calc(70 * var(--build-y)) calc(50 * var(--build-u));
 }
 #build-copy{padding-top:calc(10 * var(--build-u))}
@@ -482,6 +483,7 @@ dialog::backdrop{background:#17191866}
   }
   .process-card,.process-frame,#enquiry-form{left:var(--build-gap);right:auto}
   .process-frame{top:calc(390 * var(--build-y))}
+  .process-card{transform:translateY(calc((100% + var(--build-vgap)) * var(--card-overlap,0)))}
   .process-card{top:var(--build-vgap);bottom:auto;height:calc(370 * var(--build-y));padding:calc(70 * var(--build-y)) calc(50 * var(--build-u))}
   .process-card h3,.form-head h2{font-size:calc(32 * var(--build-u))}
   .process-kicker{margin-bottom:calc(20 * var(--build-y))}
@@ -655,7 +657,7 @@ dialog::backdrop{background:#17191866}
     padding:calc(40 * var(--u)) calc(50 * var(--u));border-radius:calc(70 * var(--u));
   }
   #interior-slider .interior-rail{width:1px}
-  .process-card{top:auto;bottom:var(--build-vgap)}
+  .process-card{top:auto;bottom:var(--build-vgap);transform:translateY(calc((-100% - var(--build-vgap)) * var(--card-overlap,0)))}
   .process-frame{top:var(--build-vgap);bottom:calc(390 * var(--build-y))}
   .contact-film-window{
     top:var(--build-vgap);height:calc((794 - 358 * var(--film-sweep,0)) * var(--build-y));transform:none;

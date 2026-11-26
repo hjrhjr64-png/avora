@@ -1277,6 +1277,8 @@ function construction(t) {
     scenes.construction.style.transform = adapted
       ? 'translate3d(' + (-100 * filmPosition) + '%, ' + (-100 * (1 - entrance)) + '%, 0)'
       : 'translate3d(' + (100 * (1 - entrance)) + '%, 0, 0)';
+    const cardReveal = ease(range(entrance, .45, 1));
+    buildCard.style.setProperty('--card-overlap', 1 - cardReveal);
     buildCard.inert = entrance < .98 || t > filmArrival;
     const i = buildAt(t);
     const changed = i !== buildIndex;
