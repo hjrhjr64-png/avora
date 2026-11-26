@@ -931,6 +931,14 @@ dialog::backdrop{background:#17191866}
   #enquiry-dialog{width:96vw;height:94dvh}
   #enquiry-dialog .enquiry{--view:max(700px,100cqh);--build-u:calc(100cqw / 768)}
 }
+@media(max-width:1024px) and (orientation:portrait){
+  #enquiry-dialog{
+    --dialog-inset:clamp(16px,3dvh,40px);
+    width:calc(100% - 2 * var(--dialog-inset));height:calc(100dvh - 2 * var(--dialog-inset));
+  }
+  #enquiry-dialog #enquiry-form{width:var(--build-card)}
+  #enquiry-dialog .enquiry-close{top:-12px;right:-12px}
+}
 @media(max-width:600px) and (orientation:portrait){
-  #enquiry-dialog .enquiry{--view:max(640px,100cqh);--build-u:calc(100cqw / 390)}
+  #enquiry-dialog .enquiry{--view:max(540px,100cqh);--build-u:calc(100cqw / 390)}
 }
