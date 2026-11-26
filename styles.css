@@ -198,7 +198,8 @@ h1,h2,.email,.menu-title{font-size:var(--display);letter-spacing:-.04em;line-hei
 :is(.construction,.enquiry){
   --build-u:calc(100vw / 1920);--build-gap:calc(10 * var(--build-u));
   --build-y:calc(var(--view) / 1080);--build-vgap:calc(10 * var(--build-y));
-  --build-card:calc(547 * var(--build-u));--build-photo:calc(1343 * var(--build-u));
+  --build-card:calc(547 * var(--build-u));
+  --build-photo:calc(100% - var(--build-card) - 3 * var(--build-gap));
   --radius:calc(70 * var(--build-u));
 }
 .process-card,.process-frame,.contact-film,#enquiry-form{top:var(--build-vgap);bottom:var(--build-vgap)}
