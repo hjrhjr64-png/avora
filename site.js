@@ -82,6 +82,7 @@ const END = 38.75;
 const story = $('#story');
 const viewport = $('.viewport');
 const menu = $('#menu');
+const enquiryDialog = $('#enquiry-dialog');
 const mast = $('#mast');
 const mastBar = mast.querySelector('.bar');
 const brand = $('.brand');
@@ -264,7 +265,7 @@ function prepareLinkHover(control) {
   }
 }
 all([
-  '.bar > .micro', '#menu :is(.numbered a, .menu-bottom a, .menu-top a, #close-menu)',
+  '.bar > .micro', '#menu :is(.numbered a, .menu-bottom a, .menu-top .micro, #close-menu)',
   '#footer :is(nav a, .socials a, .email, #privacy-button)'
 ].join(',')).forEach(prepareLinkHover);
 
@@ -1301,6 +1302,11 @@ function construction(t) {
     buildCopyShown = copyVisible;
     buildSlider.style.setProperty('--build-progress', i / buildLast);
   } else buildCopyShown = false;
+  if (enquiryDialog.open) renderEnquiry(formArrival, adapted, 1, false);
+  else renderEnquiry(t, adapted, filmPosition, entering);
+}
+
+function renderEnquiry(t, adapted, filmPosition, entering) {
   if (t > 29.9 && !forestFilm.poster) forestFilm.poster = contactPoster;
   if (t > 34 && !motion.matches) prepareContactFilm();
   const enquiry = visible('enquiry', t >= filmArrival);
@@ -1508,7 +1514,7 @@ function setupPageScroll() {
       if (event.type !== 'wheel') return true;
       if (loadingMedia || !event.cancelable ||
           event.ctrlKey || event.metaKey || event.shiftKey || Math.abs(deltaX) > Math.abs(deltaY) ||
-          textRevealOverlay.open || menu.open || privacy.open) return false;
+          textRevealOverlay.open || menu.open || enquiryDialog.open || privacy.open) return false;
       selectedSlide = null;
       return true;
     }
@@ -1706,7 +1712,7 @@ function resetScrollInput() {
 // One trackpad stroke can emit a long tail after the slide has landed.
 let wheelStroke = null;
 window.addEventListener('wheel', event => {
-  if (loadingMedia || textRevealOverlay.open || menu.open || privacy.open ||
+  if (loadingMedia || textRevealOverlay.open || menu.open || enquiryDialog.open || privacy.open ||
       event.defaultPrevented || !event.cancelable || event.ctrlKey || event.metaKey || event.shiftKey ||
       Math.abs(event.deltaY) <= Math.abs(event.deltaX) ||
       event.target.closest?.('dialog, input, textarea, select, [contenteditable]')) return;
@@ -1737,7 +1743,7 @@ function queueGallerySettle() {
   const gallery = scrollGalleries.find(g => scrollY >= slideY(g, 0) && scrollY <= slideY(g, g.last));
   if (!gallery) return;
   gallerySettleTimer = setTimeout(() => {
-    if (loadingMedia || document.hidden || pointerHeld || finger || menu.open || privacy.open) return;
+    if (loadingMedia || document.hidden || pointerHeld || finger || menu.open || enquiryDialog.open || privacy.open) return;
     if (pageScroll?.isSmooth) {
       queueGallerySettle();
       return;
@@ -1775,7 +1781,7 @@ window.addEventListener('keydown', event => {
       event.target.closest?.('input, textarea, select, [contenteditable]') ||
       !['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) return;
   const direction = {ArrowUp:-1, PageUp:-1, ArrowDown:1, PageDown:1, ' ':event.shiftKey ? -1 : 1}[event.key];
-  if (direction && !loadingMedia && !textRevealOverlay.open && !menu.open && !privacy.open &&
+  if (direction && !loadingMedia && !textRevealOverlay.open && !menu.open && !enquiryDialog.open && !privacy.open &&
       !event.target.closest?.('button, a, [role="slider"]')) {
     const y = selectedSlide ? slideY(selectedSlide.gallery, selectedSlide.slide) : scrollY;
     const next = galleryStep(y, direction);
@@ -1872,6 +1878,35 @@ for (const [slider, gallery] of [[interiorSlider, interiorGallery], [buildSlider
     selectGallery(gallery, choices[event.key]);
   });
 }
+// Keep the same fields, draft, video and responsive layout in both places.
+const enquiryHome = document.createComment('Contact section');
+scenes.enquiry.before(enquiryHome);
+const enquiryDialogContent = enquiryDialog.querySelector('.enquiry-dialog-content');
+let enquiryOpener;
+for (const button of all('[aria-controls="enquiry-dialog"]')) {
+  button.addEventListener('click', () => {
+    if (enquiryDialog.open) return;
+    resetScrollInput();
+    enquiryOpener = button;
+    enquiryDialogContent.append(scenes.enquiry);
+    enquiryDialogContent.scrollTop = 0;
+    enquiryDialog.showModal();
+    construction(current);
+  });
+}
+enquiryDialog.querySelector('.enquiry-close').addEventListener('click', () => enquiryDialog.close());
+enquiryDialog.addEventListener('click', event => {
+  if (event.target !== enquiryDialog) return;
+  const rect = enquiryDialog.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right ||
+      event.clientY < rect.top || event.clientY > rect.bottom) enquiryDialog.close();
+});
+enquiryDialog.addEventListener('close', () => {
+  if (enquiryDialog.open) return;
+  enquiryHome.after(scenes.enquiry);
+  construction(timeAt(scrollY));
+  enquiryOpener?.focus({preventScroll:true});
+});
 const privacy = $('#privacy');
 $('#privacy-button').onclick = () => { resetScrollInput(); privacy.showModal(); };
 privacy.querySelector('button').onclick = () => privacy.close();

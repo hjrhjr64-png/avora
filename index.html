@@ -26,13 +26,13 @@
   <link rel="icon" href="assets/design/letter-3.svg">
   <link rel="preload" href="assets/models/hero-front-4k.webp" as="image" fetchpriority="high">
   <link rel="preload" href="assets/fonts/archivo-500.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=20261126-card-under-photo">
+  <link rel="stylesheet" href="styles.css?v=20261126-enquiry-dialog">
   <script defer src="content.js"></script>
   <script defer src="smooth-corners.js"></script>
   <script defer src="frame-sequence.js"></script>
   <script defer src="scrub-film.js?v=20261125-1"></script>
   <script defer src="assets/vendor/lenis-1.1.9.min.js"></script>
-  <script defer src="site.js?v=20261126-card-under-photo"></script>
+  <script defer src="site.js?v=20261126-enquiry-dialog"></script>
 </head>
 <body>
 <dialog id="preloader" aria-label="Loading AVORA">
@@ -51,11 +51,11 @@
   startupOverlay.addEventListener('close', () => clearTimeout(startupFallback), {once:true});
 </script>
 <header class="mast" id="mast">
-  <div class="bar"><button class="micro" id="menu-button" aria-haspopup="dialog" aria-controls="menu">Menu</button><a class="compact-wordmark" href="#home" aria-label="AVORA home"><img src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt=""></a><a class="micro" href="#contact">Discuss<span class="desktop-word"> the project</span></a></div>
+  <div class="bar"><button class="micro" id="menu-button" aria-haspopup="dialog" aria-controls="menu">Menu</button><a class="compact-wordmark" href="#home" aria-label="AVORA home"><img src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt=""></a><button type="button" class="micro" aria-label="Discuss the project" aria-haspopup="dialog" aria-controls="enquiry-dialog">Discuss<span class="desktop-word"> the project</span></button></div>
   <a class="brand" href="#home" aria-label="AVORA home"></a>
 </header>
 <dialog id="menu" aria-label="Site menu">
-  <div class="menu-top"><button id="close-menu" aria-label="Close menu" autofocus><img src="assets/design/menu-close.svg" width="24" height="24" alt=""></button><img class="menu-wordmark" src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt="AVORA"><a class="micro" href="#contact">Discuss<span class="desktop-word"> the project</span></a></div>
+  <div class="menu-top"><button id="close-menu" aria-label="Close menu" autofocus><img src="assets/design/menu-close.svg" width="24" height="24" alt=""></button><img class="menu-wordmark" src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt="AVORA"><button type="button" class="micro" aria-label="Discuss the project" aria-haspopup="dialog" aria-controls="enquiry-dialog">Discuss<span class="desktop-word"> the project</span></button></div>
   <div class="menu-body"><div>
     <p class="micro menu-copy-mask"><span>Explore the house</span></p>
     <p class="menu-title"><span class="menu-copy-mask"><span>Every detail.</span></span>
@@ -176,6 +176,10 @@
   <a class="footer-brand" href="#home" aria-label="AVORA home"><img src="assets/design/footer-wordmark.svg" width="1919" height="296" alt=""></a>
 </footer>
 <div class="browser-bottom-edge" aria-hidden="true"></div>
+<dialog id="enquiry-dialog" aria-label="Discuss the project">
+  <button type="button" class="enquiry-close" aria-label="Close enquiry" autofocus><img src="assets/design/menu-close.svg" width="24" height="24" alt=""></button>
+  <div class="enquiry-dialog-content"></div>
+</dialog>
 <dialog id="privacy" aria-labelledby="privacy-heading"><h2 id="privacy-heading">Privacy policy</h2><p>The enquiry form prepares a message in your email app. Your contact details are shared with AVORA when you send that message.</p><button class="micro" autofocus>Close</button></dialog>
 </body>
 </html>

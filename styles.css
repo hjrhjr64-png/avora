@@ -356,9 +356,9 @@ dialog::backdrop{background:#17191866}
   display:flex;align-items:center;justify-content:space-between;padding:0 calc(20 * var(--menu-u));position:relative;
 }
 .menu-top .micro{font-size:calc(12 * var(--menu-u));letter-spacing:-.03em}
-.menu-top button img,.menu-wordmark{display:block;height:auto}
-.menu-top button img{width:calc(24 * var(--menu-u))}
-.menu-top button:is(:hover,:focus-visible) img{filter:brightness(0) invert(1)}
+#close-menu img,.menu-wordmark{display:block;height:auto}
+#close-menu img{width:calc(24 * var(--menu-u))}
+#close-menu:is(:hover,:focus-visible) img{filter:brightness(0) invert(1)}
 .menu-wordmark{
   position:absolute;left:50%;transform:translateX(-50%);width:calc(147 * var(--menu-u));
   filter:brightness(0) invert(.88235);
@@ -409,7 +409,7 @@ dialog::backdrop{background:#17191866}
   #menu{height:auto}
   .menu-top{height:50px;padding-inline:20px}
   .menu-top .micro{font-size:12px}
-  .menu-top button img{width:24px}
+  #close-menu img{width:24px}
   .menu-wordmark{width:108px}
   .menu-body{position:relative;inset:auto;display:grid;gap:28px;padding:26px 20px}
   .menu-body>div{width:auto;margin:0}
@@ -693,8 +693,8 @@ dialog::backdrop{background:#17191866}
   .menu-top{height:54px;flex:none;padding-inline:20px}
   .menu-top .micro{font-size:12px}
   .menu-wordmark{width:147px}
-  .menu-top button{display:grid;place-items:center;min-height:44px}
-  .menu-top button img{width:24px}
+  #close-menu{display:grid;place-items:center;min-height:44px}
+  #close-menu img{width:24px}
   .menu-body{position:static;display:block;padding:0;margin-top:clamp(22px,calc(14.453125svh - 54px),128px)}
   .menu-body>div,.menu-body::before{display:none}
   .numbered{position:static;display:grid;justify-items:center;gap:16px}
@@ -817,8 +817,8 @@ dialog::backdrop{background:#17191866}
   .menu-wordmark,.compact-wordmark img{width:var(--portrait-mark)}
   .compact-wordmark{left:50%;top:50%;transform:translate(-50%,-50%)}
   .menu-wordmark{top:50%;transform:translate(-50%,-50%)}
-  .menu-top button,#menu-button{width:44px;min-height:44px;text-align:left}
-  .menu-top button{justify-items:center;margin-inline-start:-10px}
+  #close-menu,#menu-button{width:44px;min-height:44px;text-align:left}
+  #close-menu{justify-items:center;margin-inline-start:-10px}
 }
 
 @media (max-width:600px) and (orientation:portrait){
@@ -906,4 +906,31 @@ dialog::backdrop{background:#17191866}
 @media (max-width:1024px) and (orientation:portrait) and (pointer:coarse) and (prefers-reduced-motion:no-preference){
   /* Keep the opening house on its scroll trajectory during the first swipe. */
   .hero.first-visit .hero-house{animation-name:appear}
+}
+
+/* Display the original contact composition at the dimensions of the dialog. */
+#enquiry-dialog{
+  position:fixed;inset:0;margin:auto;padding:0;border:0;background:transparent;
+  width:min(94vw,1800px);height:92dvh;max-width:none;max-height:none;
+  container-type:size;overflow:visible;
+}
+#enquiry-dialog::backdrop{background:rgb(23 25 24 / .38)}
+.enquiry-dialog-content{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain}
+#enquiry-dialog .enquiry{
+  --view:max(490px,100cqh);--build-u:calc(100cqw / 1920);
+  position:relative;inset:auto;height:var(--view);width:100%;
+}
+.enquiry-close{
+  position:absolute;z-index:2;top:clamp(14px,2.5cqh,32px);right:clamp(16px,1.9cqw,34px);
+  width:44px;height:44px;display:grid;place-items:center;
+  background:var(--ink);color:white;border-radius:50%;
+}
+.enquiry-close img{width:24px;height:24px}
+.enquiry-close:focus-visible{outline-color:white;outline-offset:-3px}
+@media(max-aspect-ratio:4/5), (max-width:1024px) and (orientation:portrait){
+  #enquiry-dialog{width:96vw;height:94dvh}
+  #enquiry-dialog .enquiry{--view:max(700px,100cqh);--build-u:calc(100cqw / 768)}
+}
+@media(max-width:600px) and (orientation:portrait){
+  #enquiry-dialog .enquiry{--view:max(640px,100cqh);--build-u:calc(100cqw / 390)}
 }
