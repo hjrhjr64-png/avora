@@ -1577,17 +1577,28 @@ window.addEventListener('popstate', () => {
   if (target?.classList.contains('anchor')) requestAnimationFrame(() => landOnChapter(target));
 });
 const menuButton = $('#menu-button');
-const menuOffscreen = 'translateY(-100%) scaleY(0)';
+const menuOffscreen = 'translateY(100dvh)';
+const menuEnterDuration = 850;
+const menuItems = [...menu.querySelectorAll('.numbered a, .menu-bottom')];
+let menuItemMotions = [];
 let menuMotion, menuDestination = null, menuClosing = false;
+function clearMenuMotion() {
+  menuMotion?.cancel();
+  menuItemMotions.forEach(animation => animation.cancel());
+  menuItemMotions = [];
+}
 menuButton.addEventListener('click', () => {
   if (menu.open) return;
   resetScrollInput();
   menu.showModal();
   menuButton.setAttribute('aria-expanded','true');
-  if (!motion.matches && menu.animate) {
-    menuMotion = menu.animate([{transform:menuOffscreen}, {transform:'translateY(0) scaleY(1)'}],
-      {duration:1000, easing:'cubic-bezier(.333333,1,.666667,1)'});
-  }
+  if (motion.matches || !menu.animate) return;
+  menuMotion = menu.animate([{transform:menuOffscreen}, {transform:'translateY(0)'}],
+    {duration:menuEnterDuration, easing:'cubic-bezier(.22,.75,.23,1)'});
+  menuItemMotions = menuItems.map((item, index) => item.animate([
+    {opacity:0, transform:'translateY(8px)'},
+    {opacity:1, transform:'translateY(0)'}
+  ], {duration:360, delay:menuEnterDuration + index * 125, easing:'ease-out', fill:'backwards'}));
 });
 function closeMenu() {
   if (!menu.open || menuClosing) return;
@@ -1595,9 +1606,12 @@ function closeMenu() {
   if (motion.matches || !menu.animate) return menu.close();
   menu.classList.add('menu-closing');
   const from = getComputedStyle(menu).transform;
+  menuItemMotions.forEach(animation => {
+    if (animation.playState === 'running') animation.pause();
+  });
   menuMotion?.cancel();
-  menuMotion = menu.animate([{transform:from === 'none' ? 'translateY(0) scaleY(1)' : from},
-    {transform:menuOffscreen}], {duration:500, easing:'cubic-bezier(.333333,0,.666667,0)', fill:'forwards'});
+  menuMotion = menu.animate([{transform:from === 'none' ? 'translateY(0)' : from},
+    {transform:menuOffscreen}], {duration:700, easing:'cubic-bezier(.45,0,.75,.5)', fill:'forwards'});
   menuMotion.finished.then(() => menu.close(), () => {});
 }
 $('#close-menu').addEventListener('click', closeMenu);
@@ -1611,7 +1625,7 @@ menu.addEventListener('close', () => {
   const destination = menuDestination;
   menuClosing = false;
   menuDestination = null;
-  menuMotion?.cancel();
+  clearMenuMotion();
   menu.classList.remove('menu-closing');
   menuButton.setAttribute('aria-expanded','false');
   if (destination) visitChapter(destination);
@@ -1623,7 +1637,7 @@ menu.addEventListener('click', event => {
 motion.addEventListener('change', () => {
   if (!motion.matches) return;
   if (menuClosing) menu.close();
-  else menuMotion?.cancel();
+  else clearMenuMotion();
 });
 document.addEventListener('click', e => {
   const anchor = e.target.closest('a[href^="#"]');
