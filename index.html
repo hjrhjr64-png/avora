@@ -26,13 +26,13 @@
   <link rel="icon" href="assets/design/letter-3.svg">
   <link rel="preload" href="assets/models/hero-front-4k.webp" as="image" fetchpriority="high">
   <link rel="preload" href="assets/fonts/archivo-500.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=20261126-1">
+  <link rel="stylesheet" href="styles.css?v=20261126-card-arrival">
   <script defer src="content.js"></script>
   <script defer src="smooth-corners.js"></script>
   <script defer src="frame-sequence.js"></script>
   <script defer src="scrub-film.js?v=20261125-1"></script>
   <script defer src="assets/vendor/lenis-1.1.9.min.js"></script>
-  <script defer src="site.js?v=20261126-menu-drop"></script>
+  <script defer src="site.js?v=20261126-card-arrival"></script>
 </head>
 <body>
 <dialog id="preloader" aria-label="Loading AVORA">
@@ -56,7 +56,11 @@
 </header>
 <dialog id="menu" aria-label="Site menu">
   <div class="menu-top"><button id="close-menu" aria-label="Close menu" autofocus><img src="assets/design/menu-close.svg" width="24" height="24" alt=""></button><img class="menu-wordmark" src="assets/design/compact-wordmark.svg" width="147" height="22.7111" alt="AVORA"><a class="micro" href="#contact">Discuss<span class="desktop-word"> the project</span></a></div>
-  <div class="menu-body"><div><p class="micro">Explore the house</p><p class="menu-title">Every detail.<br>One considered home.</p></div>
+  <div class="menu-body"><div>
+    <p class="micro menu-copy-mask"><span>Explore the house</span></p>
+    <p class="menu-title"><span class="menu-copy-mask"><span>Every detail.</span></span>
+      <span class="menu-copy-mask"><span>One considered home.</span></span></p>
+  </div>
     <nav class="chapter-links numbered" aria-label="Chapters">
       <a href="#home" aria-label="(01) Home"><small aria-hidden="true">(01)</small>Home</a>
       <a href="#plans" aria-label="(02) Plans"><small aria-hidden="true">(02)</small>Plans</a>

@@ -20,7 +20,7 @@ function surfaceEase(x) {
   return u * (.3 + u * (2.4 - 1.7 * u));
 }
 const wheelScrollDuration = 1.6;
-const gallerySelectDuration = .55;
+const slideTransitionDuration = 1.05;
 const referenceCoverDistance = .9;
 const referenceFade = progress => 1 - range(progress, .3, 1);
 const linear = x => x;
@@ -67,9 +67,8 @@ const wallTitleStop = 25.12;
 const wallTitleExitStart = 25.23;
 const wallTitleExitEnd = 25.62;
 const heroCopyFade = t => step(t, 0, .63);
-const buildEntry = 31.08;
-const buildStart = 31.96;
-const buildInterval = 1.01;
+let buildEntry;
+const buildStart = 32.28;
 const filmArrival = 36.12;
 const filmSweep = 36.80;
 const formArrival = 38.04;
@@ -334,11 +333,12 @@ const interiors = makeSlides(catalog.interiors, interiorTrack, 'interior');
 interiors.forEach((image, index) => { image.style.left = 'calc(' + index + ' * var(--interior-pitch))'; });
 const stages = makeSlides(catalog.stages, buildFrame, 'stage');
 const buildLast = stages.length - 1;
+const buildInterval = (36 - buildStart) / buildLast;
 const buildTime = index => buildStart + index * buildInterval;
 function buildPosition(t) {
   const position = clamp((t - buildStart) / buildInterval, 0, buildLast);
   const nearest = Math.round(position);
-  return motion.matches || Math.abs(position - nearest) * height < 1 ? nearest : position;
+  return motion.matches || Math.abs(scrollAt(t) - slideY(buildGallery, nearest)) <= .51 ? nearest : position;
 }
 const buildAt = t => Math.round(buildPosition(t));
 buildSlider.setAttribute('aria-valuemax', stages.length);
@@ -1216,7 +1216,7 @@ function wallFrameAt(t) {
   // distance for the moving part between two readable poses.
   const from = wallHolds[next - 1][1];
   const to = wallHolds[next][0];
-  return from + (to - from) * range(t, start, end);
+  return from + (to - from) * ease(range(t, start, end));
 }
 const wallTextFields = wallCards.map(card => Array.from(card.querySelector('.wall-copy').children));
 const wallCardFadeOut = 220;
@@ -1269,32 +1269,22 @@ function wallSystem(t) {
 const buildTextFields = Array.from(buildCopy.children);
 let buildCopyShown = false;
 function construction(t) {
-  const photoEntry = buildEntry;
-  const photoArrival = 31.62;
-  const cardEntry = photoEntry + referenceCoverDistance * (photoArrival - photoEntry);
   title('build-title', t, wallEnd, Math.min(wallEnd + .41, 31.07), 31.16, 31.72);
   if (t > 29.9 && t < 36.3) stages.forEach(loadImage);
   const filmPosition = step(t, filmArrival, formArrival);
   const adapted = adaptiveLayout.matches;
   const entering = portrait ? t < filmSweep : filmPosition < filmFrameShare;
-  if (visible('construction', t >= photoEntry && t < (adapted ? formArrival : 37.95))) {
-    const entrance = reveal(t, photoEntry, photoArrival);
-    const shift = (portrait ? 101 : 76) * (1 - entrance);
-    const expose = reveal(t, cardEntry, buildStart - .025);
+  if (visible('construction', t >= buildEntry && t < (adapted ? formArrival : 37.95))) {
+    // The first gallery stop is rounded to a scroll pixel.
+    const photoParked = Math.round(scrollAt(t)) >= slideY(buildGallery, 0);
+    const entrance = photoParked ? 1 : reveal(t, buildEntry, buildStart);
+    const showCard = photoParked && !textRevealOverlay.open;
     buildFrame.hidden = !adapted && !entering;
-    if (adapted) {
-      scenes.construction.style.transform = 'translate3d(' + (-100 * filmPosition) + '%, ' + (-100 * (1 - entrance)) + '%, 0)';
-      buildFrame.style.transform = '';
-      buildCard.style.transform = 'translateY(calc(' + (expose - 1) + ' * (100% + var(--build-vgap))))';
-    } else {
-      scenes.construction.style.transform = '';
-      buildFrame.style.transform = 'translateX(' + shift + 'vw)';
-      buildCard.style.transform = 'translateX(calc(' + shift + 'vw + ' + (1 - expose) + ' * (' +
-        (portrait ? '100vw' : '100% + var(--build-gap)') + ')))';
-    }
-    buildCard.style.visibility = expose > 0 && t < formArrival ? 'visible' : 'hidden';
-    buildCard.style.opacity = expose;
-    buildCard.inert = expose < .98 || t > filmArrival;
+    scenes.construction.style.transform = adapted
+      ? 'translate3d(' + (-100 * filmPosition) + '%, ' + (-100 * (1 - entrance)) + '%, 0)'
+      : 'translate3d(' + (100 * (1 - entrance)) + '%, 0, 0)';
+    buildCard.classList.toggle('is-revealed', showCard);
+    buildCard.inert = !showCard || t > filmArrival;
     const position = buildPosition(t);
     slideImages(stages, position, adapted);
     const i = Math.round(position);
@@ -1310,12 +1300,15 @@ function construction(t) {
       stages.forEach((image, index) => image.setAttribute('aria-hidden', String(index !== i)));
       buildIndex = i;
     }
-    const copyVisible = !textRevealOverlay.open && expose >= .35 && t < formArrival;
+    const copyVisible = !textRevealOverlay.open && (showCard || buildCopyShown) && t < formArrival;
     buildCopy.style.visibility = copyVisible ? 'visible' : 'hidden';
     if (copyVisible && (changed || !buildCopyShown)) revealCardLines(buildTextFields);
     buildCopyShown = copyVisible;
     buildSlider.style.setProperty('--build-progress', position / buildLast);
-  } else buildCopyShown = false;
+  } else {
+    buildCard.classList.remove('is-revealed');
+    buildCopyShown = false;
+  }
   if (t > 29.9 && !forestFilm.poster) forestFilm.poster = contactPoster;
   if (t > 34 && !motion.matches) prepareContactFilm();
   const enquiry = visible('enquiry', t >= filmArrival);
@@ -1448,6 +1441,7 @@ function measure() {
   unit = height * (portrait ? .82 : .75);
   overlapSpan = referenceCoverDistance * height / unit;
   interiorEntry = interiorArrival - overlapSpan;
+  buildEntry = buildStart - overlapSpan;
   interiorEnd = interiorExitStart + overlapSpan;
   const wallDisplay = scenes.wall.style.display;
   scenes.wall.style.display = 'block';
@@ -1458,11 +1452,17 @@ function measure() {
   // The first layer starts off-screen and rises 36 source pixels per authored
   // frame. Begin at the visible edge; desktop and portrait crop it differently.
   wallEntranceFrame = clamp(1.25 + (2555 - wallBottom) / 36, 1, wallFirstFrame - 1);
-  wallFirstArrival = wallTitleExitEnd + overlapSpan + .34;
+  // Keep the final pose and chapter handoff at their authored scroll positions.
+  // Share the distance saved on the first rise across the three assemblies.
+  const originalLead = wallTitleExitEnd + overlapSpan + .34 - wallStart;
+  wallFirstArrival = wallStart + originalLead * .47;
   const layerCenter = ([first, last]) => (first + last) / 2;
   const firstCenter = layerCenter(wallHolds[0]);
+  const lastCenter = layerCenter(wallHolds.at(-1));
+  const assemblySpan = (lastCenter - firstCenter) / wallRate + (wallStart + originalLead - wallFirstArrival);
   wallHolds.forEach((hold, index) => {
-    wallStops[index] = wallFirstArrival + (layerCenter(hold) - firstCenter) / wallRate;
+    const share = (layerCenter(hold) - firstCenter) / (lastCenter - firstCenter);
+    wallStops[index] = wallFirstArrival + share * assemblySpan;
   });
   wallFadeStart = wallStops.at(-1) + .36;
   wallEnd = wallFadeStart + .35;
@@ -1512,8 +1512,9 @@ function setupPageScroll() {
     syncTouch:false,
     prevent:node => node.matches('dialog, input, textarea, select, [contenteditable]'),
     virtualScroll:({event, deltaX, deltaY}) => {
+      if (event.defaultPrevented) return false;
       if (event.type !== 'wheel') return true;
-      if (loadingMedia || event.defaultPrevented || !event.cancelable ||
+      if (loadingMedia || !event.cancelable ||
           event.ctrlKey || event.metaKey || event.shiftKey || Math.abs(deltaX) > Math.abs(deltaY) ||
           textRevealOverlay.open || menu.open || privacy.open) return false;
       selectedSlide = null;
@@ -1580,6 +1581,7 @@ const menuButton = $('#menu-button');
 const menuOffscreen = 'translateY(-100%)';
 const menuEnterDuration = 700;
 const menuItems = [...menu.querySelectorAll('.numbered a, .menu-bottom')];
+const menuCopyLines = menu.querySelectorAll('.menu-copy-mask > span');
 let menuItemMotions = [];
 let menuMotion, menuDestination = null, menuClosing = false;
 function clearMenuMotion() {
@@ -1599,6 +1601,11 @@ menuButton.addEventListener('click', () => {
     {opacity:0, transform:'translateY(8px)'},
     {opacity:1, transform:'translateY(0)'}
   ], {duration:300, delay:menuEnterDuration + index * 100, easing:'ease-out', fill:'backwards'}));
+  menuCopyLines.forEach((line, index) => {
+    menuItemMotions.push(line.animate([
+      {transform:'translateY(105%)'}, {transform:'translateY(0)'}
+    ], {duration:540, delay:menuEnterDuration + index * 75, easing:'cubic-bezier(.22,.75,.23,1)', fill:'backwards'}));
+  });
 });
 function closeMenu() {
   if (!menu.open || menuClosing) return;
@@ -1653,23 +1660,43 @@ function interiorTime(index) {
 function interiorPosition(t) {
   const position = interiorLast * range(t, interiorFirstStop, interiorExitStart);
   const nearest = Math.round(position);
-  return motion.matches || Math.abs(position - nearest) * interiorPitch < 1 ? nearest : position;
+  return motion.matches || Math.abs(scrollAt(t) - slideY(interiorGallery, nearest)) <= .51 ? nearest : position;
 }
 const interiorGallery = {time:interiorTime, at:t => Math.round(interiorPosition(t)), last:interiorLast};
 const buildGallery = {time:buildTime, at:buildAt, last:buildLast};
 
+const scrollGalleries = [interiorGallery, buildGallery];
+const slideY = (gallery, index) => Math.round(scrollAt(gallery.time(index)));
+
+function galleryStep(y, delta) {
+  const direction = Math.sign(delta);
+  if (!direction) return null;
+  for (const gallery of scrollGalleries) {
+    const first = slideY(gallery, 0), last = slideY(gallery, gallery.last);
+    if (y < first && y + delta >= first) return {gallery, slide:0};
+    if (y > last && y + delta <= last) return {gallery, slide:gallery.last};
+    if (y < first || y > last) continue;
+    const index = gallery.at(timeAt(y));
+    const offset = (slideY(gallery, index) - y) * direction;
+    const slide = offset > 1 ? index : index + direction;
+    if (slide >= 0 && slide <= gallery.last) return {gallery, slide};
+  }
+  return null;
+}
+
 function selectGallery(gallery, index) {
   resetScrollInput();
   const slide = clamp(index, 0, gallery.last);
-  const target = Math.round(scrollAt(gallery.time(slide)));
+  const target = slideY(gallery, slide);
   if (!pageScroll || Math.abs(target - window.scrollY) < 1) {
     seekPage(target);
     return;
   }
   const selection = selectedSlide = {gallery, slide};
+  const isSlideGallery = scrollGalleries.includes(gallery);
   pageScroll.scrollTo(target, {
-    duration:gallerySelectDuration,
-    easing:surfaceEase,
+    duration:isSlideGallery ? slideTransitionDuration : .55,
+    easing:isSlideGallery ? ease : surfaceEase,
     onComplete:() => { if (selectedSlide === selection) selectedSlide = null; }
   });
 }
@@ -1677,25 +1704,95 @@ function selectGallery(gallery, index) {
 let finger = null;
 function resetScrollInput() {
   finger = null;
+  wheelStroke = null;
   cancelPageScroll();
 }
 
+// One trackpad stroke can emit a long tail after the slide has landed.
+let wheelStroke = null;
+window.addEventListener('wheel', event => {
+  if (loadingMedia || textRevealOverlay.open || menu.open || privacy.open ||
+      event.defaultPrevented || !event.cancelable || event.ctrlKey || event.metaKey || event.shiftKey ||
+      Math.abs(event.deltaY) <= Math.abs(event.deltaX) ||
+      event.target.closest?.('dialog, input, textarea, select, [contenteditable]')) return;
+  const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1);
+  const now = performance.now(), strength = Math.abs(delta);
+  if (wheelStroke && now - wheelStroke.last < 160 && Math.sign(delta) === wheelStroke.direction) {
+    const sustained = now - wheelStroke.start > slideTransitionDuration * 1000 &&
+      strength >= 12 && strength >= wheelStroke.strength;
+    wheelStroke.last = now;
+    wheelStroke.strength = strength;
+    if (!sustained) { event.preventDefault(); return; }
+  }
+  const y = selectedSlide ? slideY(selectedSlide.gallery, selectedSlide.slide) : scrollY;
+  const next = galleryStep(y, delta);
+  wheelStroke = null;
+  if (!next) return;
+  event.preventDefault();
+  selectGallery(next.gallery, next.slide);
+  wheelStroke = {start:now, last:now, strength, direction:Math.sign(delta)};
+}, {passive:false});
+
+// Embedded browsers need not emit scrollend after an interrupted or restored scroll.
+let gallerySettleTimer, pointerHeld = false;
+function queueGallerySettle() {
+  clearTimeout(gallerySettleTimer);
+  const gallery = scrollGalleries.find(g => scrollY >= slideY(g, 0) && scrollY <= slideY(g, g.last));
+  if (!gallery) return;
+  gallerySettleTimer = setTimeout(() => {
+    if (loadingMedia || document.hidden || pointerHeld || finger || menu.open || privacy.open) return;
+    if (pageScroll?.isSmooth) {
+      queueGallerySettle();
+      return;
+    }
+    const index = selectedSlide?.gallery === gallery ? selectedSlide.slide : gallery.at(timeAt(scrollY));
+    if (Math.abs(scrollY - slideY(gallery, index)) > .51) selectGallery(gallery, index);
+  }, 160);
+}
+function slideInFlight() {
+  return selectedSlide && scrollGalleries.includes(selectedSlide.gallery);
+}
 window.addEventListener('pointerdown', event => {
-  if (event.pointerType !== 'touch') resetScrollInput();
+  // A tap on the moving photo must not discard its destination.
+  pointerHeld = true;
+  if (event.pointerType !== 'touch' && (!slideInFlight() || event.button === 1 ||
+      event.clientX >= document.documentElement.clientWidth)) resetScrollInput();
 }, {passive:true});
+function releaseGalleryPointer() {
+  pointerHeld = false;
+  queueGallerySettle();
+}
+window.addEventListener('pointerup', releaseGalleryPointer, {passive:true});
+window.addEventListener('pointercancel', releaseGalleryPointer, {passive:true});
+window.addEventListener('blur', releaseGalleryPointer);
+window.addEventListener('pageshow', queueGallerySettle);
+document.addEventListener('visibilitychange', queueGallerySettle);
+for (const dialog of [menu, textRevealOverlay]) dialog.addEventListener('close', queueGallerySettle);
 window.addEventListener('popstate', resetScrollInput);
 motion.addEventListener('change', () => {
   resetScrollInput();
   setupPageScroll();
 });
 window.addEventListener('keydown', event => {
-  if (!event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey &&
-      !event.target.closest?.('input, textarea, select, [contenteditable]') &&
-      ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) resetScrollInput();
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey ||
+      event.target.closest?.('input, textarea, select, [contenteditable]') ||
+      !['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) return;
+  const direction = {ArrowUp:-1, PageUp:-1, ArrowDown:1, PageDown:1, ' ':event.shiftKey ? -1 : 1}[event.key];
+  if (direction && !loadingMedia && !textRevealOverlay.open && !menu.open && !privacy.open &&
+      !event.target.closest?.('button, a, [role="slider"]')) {
+    const y = selectedSlide ? slideY(selectedSlide.gallery, selectedSlide.slide) : scrollY;
+    const next = galleryStep(y, direction);
+    if (next) {
+      event.preventDefault();
+      if (!event.repeat || !selectedSlide) selectGallery(next.gallery, next.slide);
+      return;
+    }
+  }
+  resetScrollInput();
 });
 
 const touchStepThreshold = 12;
-function handleInteriorSwipe(event) {
+function handleGallerySwipe(event) {
   if (!finger || event.touches.length > 1) return;
   const releasing = event.type === 'touchend';
   const touch = releasing ? event.changedTouches[0] : event.touches[0];
@@ -1704,7 +1801,18 @@ function handleInteriorSwipe(event) {
   if (!finger.axis && Math.max(Math.abs(dx), Math.abs(dy)) >= 5) {
     finger.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
   }
-  if (finger.axis !== 'x' || (!finger.dragged && Math.abs(dx) < touchStepThreshold)) return;
+  if (finger.axis === 'y') {
+    if (!finger.inGallery || !event.cancelable) return;
+    const next = galleryStep(finger.startY, dy);
+    if (!next) return;
+    event.preventDefault();
+    if (releasing && Math.abs(dy) >= touchStepThreshold) {
+      selectGallery(next.gallery, next.slide);
+    }
+    return;
+  }
+  if (!finger.interior || finger.axis !== 'x' || (!finger.dragged && Math.abs(dx) < touchStepThreshold)) return;
+  if (event.cancelable) event.preventDefault();
   finger.dragged = true;
   if (releasing) {
     const direction = Math.abs(dx) >= touchStepThreshold ? Math.sign(dx) : 0;
@@ -1717,20 +1825,26 @@ function handleInteriorSwipe(event) {
   }
 }
 
-// Only a sideways drag over an interior photo seeks along the page.
+// Outside the reading stops vertical touch remains native, including chapter exits.
 window.addEventListener('touchstart', event => {
-  resetScrollInput();
-  if (event.touches.length !== 1 || !event.target.closest?.('.viewport') ||
-      event.target.closest?.('a, button, [role="slider"]') || !scenes.interiors.classList.contains('live')) return;
-  const touch = event.touches[0];
-  finger = {x:touch.clientX, y:touch.clientY, position:interiorPosition(timeAt(window.scrollY))};
-}, {passive:true});
-window.addEventListener('touchmove', handleInteriorSwipe, {passive:true});
-window.addEventListener('touchend', event => {
-  handleInteriorSwipe(event);
+  if (!slideInFlight()) resetScrollInput();
   finger = null;
+  if (event.touches.length !== 1 || !event.target.closest?.('.viewport') ||
+      event.target.closest?.('a, button, [role="slider"]')) return;
+  const interior = scenes.interiors.classList.contains('live');
+  const inGallery = scrollGalleries.some(g => scrollY >= slideY(g, 0) && scrollY <= slideY(g, g.last));
+  if (!interior && !inGallery) return;
+  const touch = event.touches[0];
+  finger = {x:touch.clientX, y:touch.clientY, startY:scrollY, interior, inGallery, position:interiorPosition(timeAt(window.scrollY))};
 }, {passive:true});
-window.addEventListener('touchcancel', () => { finger = null; }, {passive:true});
+viewport.addEventListener('touchmove', handleGallerySwipe, {passive:false});
+viewport.addEventListener('touchend', handleGallerySwipe, {passive:false});
+function releaseGalleryTouch() {
+  finger = null;
+  queueGallerySettle();
+}
+window.addEventListener('touchend', releaseGalleryTouch, {passive:true});
+window.addEventListener('touchcancel', releaseGalleryTouch, {passive:true});
 
 interiorSlider.addEventListener('click', event => {
   const {top, height: trackHeight} = interiorSlider.getBoundingClientRect();
@@ -1759,6 +1873,7 @@ for (const [slider, gallery] of [[interiorSlider, interiorGallery], [buildSlider
 const privacy = $('#privacy');
 $('#privacy-button').onclick = () => { resetScrollInput(); privacy.showModal(); };
 privacy.querySelector('button').onclick = () => privacy.close();
+privacy.addEventListener('close', queueGallerySettle);
 const formStatus = $('#form-status');
 const enquiryDraft = $('#enquiry-draft');
 const enquiryIntro = $('#enquiry-intro');
@@ -1922,6 +2037,7 @@ function settleStageHeight() {
   }, 180);
 }
 window.addEventListener('scroll', () => {
+  queueGallerySettle();
   if (!pageScroll?.isSmooth) schedule();
   if (stageResizeTimer) settleStageHeight();
 }, {passive:true});
