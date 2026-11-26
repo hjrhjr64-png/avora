@@ -1889,7 +1889,47 @@ scenes.enquiry.before(enquiryHome);
 const enquiryDialogContent = enquiryDialog.querySelector('.enquiry-dialog-content');
 const enquiryClose = enquiryDialog.querySelector('.enquiry-close');
 const tabletEnquiry = matchMedia('(min-width:601px) and (max-width:1024px) and (orientation:portrait)');
-let enquiryOpener;
+let enquiryOpener, enquiryUnderlay;
+
+// Keep the visible page painted while the interactive form moves into the fading dialog.
+function preserveEnquiryBackground() {
+  if (!scenes.enquiry.classList.contains('live')) return;
+  const still = scenes.enquiry.cloneNode(false);
+  still.classList.add('enquiry-underlay');
+  still.inert = true;
+  still.setAttribute('aria-hidden', 'true');
+  const form = contactForm.cloneNode(true);
+  form.removeAttribute('id');
+  for (const el of form.querySelectorAll('[id]')) el.removeAttribute('id');
+
+  const frame = forestFilm.parentElement.cloneNode(false);
+  const frameWindow = filmWindow.cloneNode(false);
+  let picture;
+  if (forestFilm.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && forestFilm.videoWidth) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(1920, forestFilm.videoWidth);
+    canvas.height = Math.round(canvas.width * forestFilm.videoHeight / forestFilm.videoWidth);
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.drawImage(forestFilm, 0, 0, canvas.width, canvas.height);
+      picture = canvas;
+    }
+  }
+  if (!picture) {
+    picture = new Image();
+    picture.alt = '';
+    picture.src = forestFilm.poster || contactPoster;
+  }
+  frame.append(picture);
+  frameWindow.append(frame);
+  still.append(form, frameWindow);
+  enquiryHome.after(still);
+  enquiryUnderlay = still;
+}
+function moveEnquiry(parent, before = null) {
+  if (parent.moveBefore) parent.moveBefore(scenes.enquiry, before);
+  else parent.insertBefore(scenes.enquiry, before);
+}
 function placeEnquiryClose() {
   const host = tabletEnquiry.matches ? contactForm : enquiryDialog;
   if (enquiryClose.parentElement === host) return;
@@ -1903,13 +1943,19 @@ tabletEnquiry.addEventListener('change', () => {
 for (const button of all('[aria-controls="enquiry-dialog"]')) {
   button.addEventListener('click', event => {
     if (enquiryDialog.open) return;
+    // A second click can arrive before the previous native close event.
+    if (enquiryDialogContent.contains(scenes.enquiry)) restoreEnquiry();
     resetScrollInput();
     enquiryOpener = button;
-    enquiryDialogContent.append(scenes.enquiry);
+    preserveEnquiryBackground();
+    moveEnquiry(enquiryDialogContent);
     enquiryDialogContent.scrollTop = 0;
     enquiryDialog.showModal();
     construction(current);
     placeEnquiryClose();
+    // Commit the transparent opening state after layout and before starting the transition.
+    getComputedStyle(enquiryDialog).opacity;
+    enquiryDialog.classList.add('revealed');
     if (event.detail > 0) enquiryDialog.focus({preventScroll:true});
   });
 }
@@ -1935,12 +1981,17 @@ enquiryDialog.addEventListener('click', event => {
   if (event.clientX < rect.left || event.clientX > rect.right ||
       event.clientY < rect.top || event.clientY > rect.bottom) dismissDialog(enquiryDialog);
 });
-enquiryDialog.addEventListener('close', () => {
-  if (enquiryDialog.open) return;
+function restoreEnquiry() {
+  enquiryDialog.classList.remove('revealed');
   enquiryDialog.prepend(enquiryClose);
-  enquiryHome.after(scenes.enquiry);
+  moveEnquiry(enquiryHome.parentNode, enquiryHome.nextSibling);
+  enquiryUnderlay?.remove();
+  enquiryUnderlay = null;
   construction(timeAt(scrollY));
   enquiryOpener?.focus({preventScroll:true});
+}
+enquiryDialog.addEventListener('close', () => {
+  if (!enquiryDialog.open && enquiryDialogContent.contains(scenes.enquiry)) restoreEnquiry();
 });
 const privacy = $('#privacy');
 $('#privacy-button').onclick = () => { resetScrollInput(); privacy.showModal(); };
