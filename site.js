@@ -1587,8 +1587,12 @@ function clearMenuMotion() {
   menuItemMotions.forEach(animation => animation.cancel());
   menuItemMotions = [];
 }
-menuButton.addEventListener('click', () => {
+function openMenu() {
   if (menu.open) return;
+  if (menuClosing) {
+    menu.addEventListener('close', openMenu, {once:true});
+    return;
+  }
   resetScrollInput();
   menu.showModal();
   menuButton.setAttribute('aria-expanded','true');
@@ -1604,7 +1608,8 @@ menuButton.addEventListener('click', () => {
       {transform:'translateY(105%)'}, {transform:'translateY(0)'}
     ], {duration:540, delay:menuEnterDuration + index * 75, easing:'cubic-bezier(.22,.75,.23,1)', fill:'backwards'}));
   });
-});
+}
+menuButton.addEventListener('click', openMenu);
 function closeMenu() {
   if (!menu.open || menuClosing) return;
   menuClosing = true;
@@ -1905,7 +1910,7 @@ for (const button of all('[aria-controls="enquiry-dialog"]')) {
     enquiryDialog.showModal();
     construction(current);
     placeEnquiryClose();
-    if (adaptiveLayout.matches && event.detail > 0) enquiryDialog.focus({preventScroll:true});
+    if (event.detail > 0) enquiryDialog.focus({preventScroll:true});
   });
 }
 // Keep the modal in the top layer until its exit transition finishes.
@@ -1921,7 +1926,7 @@ function dismissDialog(dialog) {
 }
 enquiryClose.addEventListener('click', () => dismissDialog(enquiryDialog));
 enquiryDialog.addEventListener('click', event => {
-  if (adaptiveLayout.matches && event.target === enquiryDialogContent) {
+  if (event.target === enquiryDialogContent) {
     dismissDialog(enquiryDialog);
     return;
   }

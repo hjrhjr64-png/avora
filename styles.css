@@ -377,6 +377,13 @@ dialog::backdrop{background:#17191866}
   content:'';position:absolute;left:50%;top:0;width:1px;height:calc(473 * var(--menu-u));
   background:rgb(225 225 225 / .2);pointer-events:none;
 }
+@media(prefers-reduced-motion:no-preference){
+  #menu[open] .menu-body::before{
+    transform-origin:top;animation:menu-divider-in .64s var(--reveal-ease) .45s backwards;
+  }
+  #menu.menu-closing .menu-body::before{animation-play-state:paused}
+  @keyframes menu-divider-in{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+}
 .menu-body>div{width:calc(474 * var(--menu-u));margin-left:calc(81 * var(--menu-u))}
 .menu-body .micro{font-size:calc(16 * var(--menu-u));font-weight:500;letter-spacing:-.03em;opacity:.4}
 .menu-copy-mask,.menu-copy-mask>span{display:block}
@@ -917,40 +924,35 @@ dialog::backdrop{background:#17191866}
   .hero.first-visit .hero-house{animation-name:appear}
 }
 
-/* Display the original contact composition at the dimensions of the dialog. */
+/* Use the same viewport and design units as the inline contact section. */
 #enquiry-dialog{
   position:fixed;inset:0;margin:auto;padding:0;border:0;background:transparent;
-  width:min(94vw,1800px);height:92dvh;max-width:none;max-height:none;
+  width:100%;height:100dvh;max-width:none;max-height:none;
   container-type:size;overflow:visible;
 }
 #enquiry-dialog::backdrop{background:rgb(23 25 24 / .38)}
 .enquiry-dialog-content{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain}
 #enquiry-dialog .enquiry{
-  position:relative;inset:auto;height:var(--view);width:100%;
+  position:relative;inset:auto;height:max(100%,var(--view));width:100%;
 }
-@media(min-width:1025px), (orientation:landscape){
-  #enquiry-dialog .enquiry{--view:max(490px,100cqh);--build-u:calc(100cqw / 1920)}
-}
+#enquiry-dialog .contact-film{pointer-events:auto}
 .enquiry-close{
-  position:absolute;z-index:2;top:clamp(14px,2.5cqh,32px);right:clamp(16px,1.9cqw,34px);
+  position:absolute;z-index:2;top:env(safe-area-inset-top,0px);right:max(4px,env(safe-area-inset-right,0px));
   width:44px;height:44px;display:grid;place-items:center;
-  background:var(--ink);color:white;border-radius:50%;
+  background:transparent;color:white;border-radius:50%;
 }
 .enquiry-close img{width:24px;height:24px}
 .enquiry-close:focus-visible{outline-color:white;outline-offset:-3px}
-@media(min-width:1025px) and (max-aspect-ratio:4/5){
-  #enquiry-dialog{width:96vw;height:94dvh}
-  #enquiry-dialog .enquiry{--view:max(700px,100cqh);--build-u:calc(100cqw / 768)}
+@media(min-width:1025px), (orientation:landscape) and (pointer:fine){
+  .enquiry-close{place-items:start end;padding:4px}
 }
-@media(max-width:1024px) and (orientation:portrait){
-  #enquiry-dialog{width:100%;height:100dvh}
-  #enquiry-dialog .enquiry{height:max(100%,var(--view))}
-  #enquiry-dialog .contact-film{pointer-events:auto}
-  #enquiry-dialog .enquiry-close{
-    top:calc(clamp(8px,2vw,16px) + 6px);right:calc(clamp(14px,3vw,24px) + 8px);background:transparent;
-  }
+@media(max-width:1024px) and (orientation:landscape) and (pointer:coarse){
+  #enquiry-dialog{width:94vw;height:92dvh}
+  #enquiry-dialog .enquiry{--view:max(490px,100cqh);--build-u:calc(100cqw / 1920)}
+  .enquiry-close{top:clamp(14px,2.5cqh,32px);right:clamp(16px,1.9cqw,34px);background:var(--ink)}
 }
 @media(min-width:601px) and (max-width:1024px) and (orientation:portrait){
+  #enquiry-dialog .enquiry-close{top:calc(clamp(8px,2vw,16px) + 6px);right:calc(clamp(14px,3vw,24px) + 8px)}
   #enquiry-dialog #enquiry-form{top:var(--build-gap);bottom:auto}
   #enquiry-dialog .contact-film-window{
     top:calc(var(--form-height) + 2 * var(--build-gap));bottom:var(--build-gap);
@@ -958,8 +960,7 @@ dialog::backdrop{background:#17191866}
   }
 }
 
-@media(max-width:600px) and (orientation:portrait){
-  #enquiry-dialog .enquiry-close{top:env(safe-area-inset-top,0px);right:max(4px,env(safe-area-inset-right,0px))}
+@media(min-width:1025px), (orientation:landscape) and (pointer:fine), (max-width:600px) and (orientation:portrait){
   .enquiry-close img{width:20px;height:20px;filter:drop-shadow(0 1px 2px #202525)}
   body:has(#enquiry-dialog[open]) :is(.bar,.menu-top) [aria-controls="enquiry-dialog"]{visibility:hidden}
 }
