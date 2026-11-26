@@ -1593,7 +1593,7 @@ menuButton.addEventListener('click', () => {
   menu.showModal();
   menuButton.setAttribute('aria-expanded','true');
   if (motion.matches || !menu.animate) return;
-  menuMotion = menu.animate([{transform:menuOffscreen}, {transform:'translateY(0)'}],
+  menuMotion = menu.animate([{transform:menuOffscreen, opacity:0}, {transform:'translateY(0)', opacity:1}],
     {duration:menuEnterDuration, easing:'cubic-bezier(.22,.75,.23,1)'});
   menuItemMotions = menuItems.map((item, index) => item.animate([
     {opacity:0, transform:'translateY(8px)'},
@@ -1610,13 +1610,13 @@ function closeMenu() {
   menuClosing = true;
   if (motion.matches || !menu.animate) return menu.close();
   menu.classList.add('menu-closing');
-  const from = getComputedStyle(menu).transform;
+  const {transform, opacity} = getComputedStyle(menu);
   menuItemMotions.forEach(animation => {
     if (animation.playState === 'running') animation.pause();
   });
   menuMotion?.cancel();
-  menuMotion = menu.animate([{transform:from === 'none' ? 'translateY(0)' : from},
-    {transform:menuOffscreen}], {duration:580, easing:'cubic-bezier(.45,0,.75,.5)', fill:'forwards'});
+  menuMotion = menu.animate([{transform:transform === 'none' ? 'translateY(0)' : transform, opacity},
+    {transform:menuOffscreen, opacity:0}], {duration:580, easing:'cubic-bezier(.45,0,.75,.5)', fill:'forwards'});
   menuMotion.finished.then(() => menu.close(), () => {});
 }
 $('#close-menu').addEventListener('click', closeMenu);
@@ -1883,15 +1883,16 @@ const enquiryHome = document.createComment('Contact section');
 scenes.enquiry.before(enquiryHome);
 const enquiryDialogContent = enquiryDialog.querySelector('.enquiry-dialog-content');
 const enquiryClose = enquiryDialog.querySelector('.enquiry-close');
+const tabletEnquiry = matchMedia('(min-width:601px) and (max-width:1024px) and (orientation:portrait)');
 let enquiryOpener;
 function placeEnquiryClose() {
-  const host = adaptiveLayout.matches ? contactForm : enquiryDialog;
+  const host = tabletEnquiry.matches ? contactForm : enquiryDialog;
   if (enquiryClose.parentElement === host) return;
   const hadFocus = document.activeElement === enquiryClose;
   host.prepend(enquiryClose);
   if (hadFocus) enquiryClose.focus({preventScroll:true});
 }
-adaptiveLayout.addEventListener('change', () => {
+tabletEnquiry.addEventListener('change', () => {
   if (enquiryDialog.open) placeEnquiryClose();
 });
 for (const button of all('[aria-controls="enquiry-dialog"]')) {
@@ -1907,16 +1908,27 @@ for (const button of all('[aria-controls="enquiry-dialog"]')) {
     if (adaptiveLayout.matches && event.detail > 0) enquiryDialog.focus({preventScroll:true});
   });
 }
-enquiryClose.addEventListener('click', () => enquiryDialog.close());
+// Keep the modal in the top layer until its exit transition finishes.
+function dismissDialog(dialog) {
+  if (!dialog.open || dialog.classList.contains('dismissing')) return;
+  if (motion.matches) return dialog.close();
+  dialog.classList.add('dismissing');
+  const fades = dialog.getAnimations().filter(animation => animation.transitionProperty === 'opacity');
+  Promise.allSettled(fades.map(animation => animation.finished)).then(() => {
+    dialog.classList.remove('dismissing');
+    if (dialog.open) dialog.close();
+  });
+}
+enquiryClose.addEventListener('click', () => dismissDialog(enquiryDialog));
 enquiryDialog.addEventListener('click', event => {
   if (adaptiveLayout.matches && event.target === enquiryDialogContent) {
-    enquiryDialog.close();
+    dismissDialog(enquiryDialog);
     return;
   }
   if (event.target !== enquiryDialog) return;
   const rect = enquiryDialog.getBoundingClientRect();
   if (event.clientX < rect.left || event.clientX > rect.right ||
-      event.clientY < rect.top || event.clientY > rect.bottom) enquiryDialog.close();
+      event.clientY < rect.top || event.clientY > rect.bottom) dismissDialog(enquiryDialog);
 });
 enquiryDialog.addEventListener('close', () => {
   if (enquiryDialog.open) return;
@@ -1927,7 +1939,13 @@ enquiryDialog.addEventListener('close', () => {
 });
 const privacy = $('#privacy');
 $('#privacy-button').onclick = () => { resetScrollInput(); privacy.showModal(); };
-privacy.querySelector('button').onclick = () => privacy.close();
+privacy.querySelector('button').onclick = () => dismissDialog(privacy);
+for (const dialog of [enquiryDialog, privacy]) {
+  dialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    dismissDialog(dialog);
+  });
+}
 privacy.addEventListener('close', queueGallerySettle);
 const formStatus = $('#form-status');
 const enquiryDraft = $('#enquiry-draft');
