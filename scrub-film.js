@@ -31,13 +31,13 @@ class MatteCanvas {
         `precision highp float;
         varying vec2 uv;
         uniform sampler2D picture;
-        uniform vec2 split;
+        uniform vec4 planes;
+        uniform vec2 matteOrigin;
         uniform bool still;
         void main(){
           if(still){vec4 c=texture2D(picture,uv);gl_FragColor=vec4(c.rgb*c.a,c.a);return;}
-          vec2 coord=uv*split;
-          vec3 rgb=texture2D(picture,coord).rgb;
-          float alpha=texture2D(picture,coord+1.-split).r;
+          vec3 rgb=texture2D(picture,uv*planes.xy).rgb;
+          float alpha=texture2D(picture,matteOrigin+uv*planes.zw).r;
           gl_FragColor=vec4(clamp(rgb-vec3((1.-alpha)*225./255.),0.,alpha),alpha);
         }`
       ]
@@ -56,7 +56,11 @@ class MatteCanvas {
     const pos = gl.getAttribLocation(program, 'p');
     gl.enableVertexAttribArray(pos);
     gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(gl.getUniformLocation(program, 'split'), sideBySide ? 0.5 : 1, sideBySide ? 1 : 0.5);
+    this.planesUniform = gl.getUniformLocation(program, 'planes');
+    this.matteOrigin = gl.getUniformLocation(program, 'matteOrigin');
+    const planeX = sideBySide ? .5 : 1, planeY = sideBySide ? 1 : .5;
+    gl.uniform4f(this.planesUniform, planeX, planeY, planeX, planeY);
+    gl.uniform2f(this.matteOrigin, 1 - planeX, 1 - planeY);
     this.still = gl.getUniformLocation(program, 'still');
     this.staticTextures = new WeakMap();
     this.videoTexture = this.texture();
@@ -101,7 +105,7 @@ class MatteCanvas {
     }
     return plane;
   }
-  draw(source, still, crop) {
+  draw(source, still, crop, planes) {
     const {gl, canvas} = this;
     let x = 0,
       y = 0,
@@ -115,6 +119,15 @@ class MatteCanvas {
       h = Math.round(((top + height) * canvas.height) / fullHeight) - y;
     }
     if (gl) {
+      if (planes && this.planes !== planes) {
+        this.planes = planes;
+        const [colorWidth, colorHeight, matteWidth, matteHeight] = planes;
+        const frameWidth = Math.max(colorWidth, matteWidth);
+        const frameHeight = colorHeight + matteHeight;
+        gl.uniform4f(this.planesUniform, colorWidth / frameWidth, colorHeight / frameHeight,
+          matteWidth / frameWidth, matteHeight / frameHeight);
+        gl.uniform2f(this.matteOrigin, 0, colorHeight / frameHeight);
+      }
       gl.viewport(x, canvas.height - y - h, w, h);
       gl.uniform1i(this.still, still ? 1 : 0);
       const texture = still && this.staticTextures.get(source);
@@ -137,7 +150,11 @@ class MatteCanvas {
       scratch.height = sh;
     }
     const read = scratch.getContext('2d', {willReadFrequently: true});
-    read.drawImage(source, 0, 0, sw, sh);
+    if (planes) {
+      const [colorWidth, colorHeight, matteWidth, matteHeight] = planes;
+      read.drawImage(source, 0, 0, colorWidth, colorHeight, 0, 0, w, h);
+      read.drawImage(source, 0, colorHeight, matteWidth, matteHeight, 0, h, w, h);
+    } else read.drawImage(source, 0, 0, sw, sh);
     const color = read.getImageData(0, 0, w, h);
     const mask = read.getImageData(this.sideBySide ? w : 0, this.sideBySide ? 0 : h, w, h).data;
     for (let i = 0; i < mask.length; i += 4) {
@@ -155,9 +172,9 @@ class MatteCanvas {
 class ScrubFilm {
   constructor(
     canvas,
-    {path, matte, draw, offset = () => 0, stillPaths = {}, fallback}
+    {path, matte, draw, offset = () => 0, stillPaths = {}, fallback, codecFallbacks = []}
   ) {
-    Object.assign(this, {canvas, path, draw, offset, stillPaths, fallback, matteLayout: matte});
+    Object.assign(this, {canvas, path, draw, offset, stillPaths, fallback, codecFallbacks, matteLayout: matte});
     if (!matte) this.context = canvas.getContext('2d');
     this.frames = new Map();
     this.stills = new Map();
@@ -262,16 +279,23 @@ class ScrubFilm {
     }
     if (!online || preload?.blocking) await this.warmStills();
     try {
-      const description = Uint8Array.from(m.avcc.match(/../g), (v) => parseInt(v, 16));
+      const description = Uint8Array.from((m.description ?? m.avcc).match(/../g), (v) => parseInt(v, 16));
       const config = {
-        codec: 'avc1.' + m.avcc.slice(2, 8),
+        codec: m.codec ?? ('avc1.' + m.avcc.slice(2, 8)),
         description,
         codedWidth: m.width,
         codedHeight: m.height,
         optimizeForLatency: true
       };
-      if (!window.VideoDecoder || !(await VideoDecoder.isConfigSupported(config)).supported)
+      const support = await window.VideoDecoder?.isConfigSupported(config).catch(() => null);
+      if (!support?.supported) {
+        const nextCodec = this.codecFallbacks[this.codecFallbacks.indexOf(this.path) + 1];
+        if (online && nextCodec) {
+          this.path = nextCodec;
+          return this.prepare(online, preload);
+        }
         throw new Error('native seek');
+      }
       if (this.blob) {
         this.bytes = new Uint8Array(await this.blob.arrayBuffer());
         if (online) this.blob = null;
@@ -431,10 +455,10 @@ class ScrubFilm {
     if (this.rasterWidth) {
       const fullWidth = still
         ? source.width
-        : (this.meta.crop?.[4] ?? this.meta.width / (this.matte?.sideBySide ? 2 : 1));
+        : (this.meta.crop?.[4] ?? this.meta.planes?.[0] ?? this.meta.width / (this.matte?.sideBySide ? 2 : 1));
       const fullHeight = still
         ? source.height
-        : (this.meta.crop?.[5] ?? this.meta.height / (this.matte && !this.matte.sideBySide ? 2 : 1));
+        : (this.meta.crop?.[5] ?? this.meta.planes?.[1] ?? this.meta.height / (this.matte && !this.matte.sideBySide ? 2 : 1));
       const w = Math.min(this.rasterWidth, fullWidth),
         ratio = fullHeight / fullWidth;
       if (this.canvas.width !== w || this.canvas.height !== Math.round(w * ratio)) {
@@ -442,7 +466,7 @@ class ScrubFilm {
         this.canvas.height = Math.round(w * ratio);
       }
     }
-    if (this.matte) this.matte.draw(source, still, this.meta?.crop);
+    if (this.matte) this.matte.draw(source, still, this.meta?.crop, this.meta?.planes);
     else if (this.draw) this.draw(this.context, source);
     else this.context.drawImage(source, 0, 0, this.canvas.width, this.canvas.height);
     this.shown = {folder, position: index + 1 - this.offset(folder), index};
@@ -510,6 +534,8 @@ class ScrubFilm {
     return !!this.shown;
   }
   setImage(folder, position, total, paint) {
+    this.wanted = {folder, position, index:position - 1 + this.offset(folder)};
+    if (this.fallback === false) return this.shown?.folder === folder;
     // A missing film/index can still display the authored WebP/JPEG sequence.
     if (!this.images)
       this.images = new FrameSequence(document.createElement('canvas'), schedule, {
@@ -517,7 +543,6 @@ class ScrubFilm {
         source: mediaSource,
         draw: () => {}
       });
-    this.wanted = {folder, position, index:position - 1 + this.offset(folder)};
     this.images.set(folder, position, total, paint);
     const shown = this.images.shown;
     if (paint && shown && this.shown?.frame !== shown.frame) {

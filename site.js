@@ -401,18 +401,21 @@ function showVillage(pose, paint = true) {
 const orbitFolder = models + 'orbit';
 const morphFolder = models + 'morph';
 const masterPaths = {};
-if (!compactMedia) {
+if (packagedMedia && !compactMedia) {
   for (const [i, n] of [[150,1],[330,91],[510,181]])
     masterPaths[i] = sequenceAsset(morphFolder + '-hd-detail',n);
 }
+const morphStart = 150, morphMiddle = 330, morphEnd = 510;
+const houseUsesRanges = !packagedMedia && highDensity && !tabletHouse;
 const houseCanvas = $('#house-sequence');
 const house = new ScrubFilm(houseCanvas,{
-  path:scrubPath('house',tabletHouse ? 'tablet' : detailProfile), matte:'below',
-  offset:folder => folder === morphFolder ? 150 : 0, stillPaths:masterPaths,
-  fallback:{asset:(folder,index) => {
+  path:scrubPath(packagedMedia ? 'house' : 'house-dense',tabletHouse ? 'tablet' : detailProfile), matte:'below',
+  codecFallbacks:houseUsesRanges ? [scrubPath('house-dense','hevc'), scrubPath('house-dense','compatible')] : undefined,
+  offset:folder => folder === morphFolder ? morphStart : 0, stillPaths:masterPaths,
+  fallback:packagedMedia ? {asset:(folder,index) => {
     if (folder === orbitFolder) return sequenceAsset(compactMedia || tabletHouse ? folder : folder+'-detail',index);
     return masterPaths[index+149] ?? interleavedAsset(compactMedia || tabletHouse ? folder : folder+'-detail',index);
-  }}
+  }} : false
 });
 const field = $('.facade-field');
 const facadeCanvas = $('.facade-turn');
@@ -877,6 +880,32 @@ function renderPlanRail(t) {
   }
   plansOpen = open;
 }
+let lastMorphPaint = 0;
+function showHousePose(target) {
+  const painted = house.shown?.index;
+  const now = performance.now();
+  let pose = target;
+  if (!motion.matches && !focusOnArrival && painted != null && (painted >= morphStart || target >= morphStart)) {
+    // Advance from the frame actually displayed, including while decoding lags behind a quick gesture.
+    if (painted < morphStart) {
+      pose = morphStart;
+    } else if (target >= morphStart || painted > morphStart) {
+      const destination = Math.max(morphStart, target);
+      let distance = destination - painted;
+      if ((destination - morphMiddle) * (painted - morphMiddle) < 0) distance = morphMiddle - painted;
+      const budget = clamp(Math.round((now - lastMorphPaint) * .22), 1, 6);
+      pose = painted + clamp(distance, -budget, budget);
+    }
+  }
+  if (pose < morphStart) house.set(orbitFolder, pose, morphStart);
+  else house.set(morphFolder, pose - morphStart + 1, sampleFrame(181));
+
+  const shown = house.shown?.index;
+  if (shown != null && shown !== painted) {
+    lastMorphPaint = now;
+    if (shown !== (target < morphStart ? target - 1 : target)) schedule();
+  }
+}
 function houseAndPlans(t) {
   const active = visible('geometry', t >= 5.12 && t < interiorArrival);
   if (t > (tabletHouse ? 3.2 : 4.4) && t < 5.12) {
@@ -938,8 +967,7 @@ function houseAndPlans(t) {
     modelFrame.style.width = (50 + 50 * leave) + '%';
   }
 
-  if (pose < 150) house.set(orbitFolder, pose, 150);
-  else house.set(morphFolder, pose - 149, sampleFrame(181));
+  showHousePose(pose);
 }
 // Integrate a short acceleration into one constant rate through the mask.
 function turnProgress(t, start, end) {
@@ -2208,8 +2236,9 @@ function prepareOnlineMedia(t) {
     if (openingVillage && !openingVillage.loading) openingVillage.loadOnline({blocking:true});
     const openingReady = !openingVillage || openingVillage.meta || openingVillage.failed;
     if (openingReady && touchViewport.matches && !house.loading)
-      house.loadOnline({streamOnApproach:true});
-    if (!village.loading && openingReady && (!touchViewport.matches || house.bytes || house.video || house.failed || house.downloadFinished))
+      house.loadOnline({streamOnApproach:true, rangeOnly:houseUsesRanges});
+    if (!village.loading && openingReady && (!touchViewport.matches || house.bytes || house.video || house.failed ||
+        house.downloadFinished || (houseUsesRanges && house.meta)))
       village.loadOnline({blocking:true});
   }
   if (t > .18 && t < 6.2 && !scenes.panorama.style.getPropertyValue('--panorama-poster')) {
@@ -2217,8 +2246,7 @@ function prepareOnlineMedia(t) {
     scenes.panorama.style.setProperty('--panorama-poster', `url("${sequenceAsset(villageFolder, 1, 'jpg')}")`);
   }
   if (!house.loading && t > (touchViewport.matches ? .18 : 3.2) && t < 18.15)
-    house.loadOnline({streamOnApproach:touchViewport.matches});
-  if (!house.loadingStills && t > 5.1 && t < 16.85) house.warmStills();
+    house.loadOnline({streamOnApproach:touchViewport.matches, rangeOnly:houseUsesRanges});
   if (t > 10.8 && t < 19.05) {
     if (adaptiveLayout.matches && !facadePreview.src) {
       facadePreview.onload = schedule;
@@ -2282,7 +2310,8 @@ async function warmOpening(onProgress, signal) {
   const update = () => onProgress(.15 * imageProgress + .85 * filmProgress);
   await Promise.all([
     work.then(() => { imageProgress = 1; update(); }),
-    film?.loadOnline({blocking:true, signal, progress:fraction => { filmProgress = fraction; update(); }})
+    film?.loadOnline({blocking:film !== house || !houseUsesRanges, rangeOnly:film === house && houseUsesRanges,
+      signal, progress:fraction => { filmProgress = fraction; update(); }})
       .finally(() => { filmProgress = 1; update(); })
   ]);
   if (film && !signal.aborted && film.bytes && film.config) film.decodeGroup(0);
